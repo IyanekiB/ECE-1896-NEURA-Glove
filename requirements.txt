@@ -1,7 +1,4 @@
-matplotlib==3.10.1
-mediapipe==0.10.21
 numpy==1.26.4
-opencv-contrib-python==4.11.0.86
-opencv-python==4.11.0.86
-pillow==11.2.1
-
+opencv-python==4.10.0.84
+mediapipe==0.10.14
+pywin32==306

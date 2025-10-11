@@ -1,5 +1,5 @@
-# ExampleTeam
-Example Project Repo for VirtualWebCam
+# NEURA Glove
+Project Repo for NEURA Glove
 
 <!-- This sets up to run the tests and place a badge on GitHub if it passes -->
 
@@ -7,12 +7,28 @@ Example Project Repo for VirtualWebCam
 ![Tests](https://github.com/SSOE-ECE1390/ExampleTeam/actions/workflows/tests.yml/badge.svg)
 
 
-Brief Description:
-The goal of this project is to build a virtual webcam to allow manipulations of live-video feeds from a webcam to be used in Zoom
+## NEURA Glove: Neural Enhanced User Reality Assistant
+
+Current VR/AR systems rely on handheld controllers or optical tracking, which limit natural interaction. Controllers constrain motion, while camera-based tracking suffers from occlusion, lighting sensitivity, restricted range, and high computational costs.
+
+The NEURA Glove addresses these issues using a wearable system with flex sensors (for finger bends) and an IMU (for hand orientation/motion). Sensor data is processed by a neural network to deliver accurate, real-time hand pose estimation—free from lighting and line-of-sight constraints.
+
+Prototype Capabilities:
+- High-accuracy finger pose recognition
+- Smooth, low-jitter temporal tracking
+- Seamless VR integration
+
+Applications:
+- Gaming & immersive interaction
+- Rehabilitation therapy with precise motion tracking
+- Accessibility via custom gesture-based input
+
+By combining wearable sensing, machine learning, and VR integration, the NEURA Glove provides a cost-effective, portable, and inclusive alternative to traditional input systems.
 
 Team Members:
-Dr Huppert (huppert1@pitt.edu)
-Yang Du (yang.du@pitt.edu)
+Iyan Nekib (iyn1@pitt.edu)
+Caitlyn Homa (cmh299@pitt.edu)
+Lucas Connell (lzc6@pitt.edu)
 
 
 
