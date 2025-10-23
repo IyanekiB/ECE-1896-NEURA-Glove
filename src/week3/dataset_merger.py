@@ -1,21 +1,18 @@
 """
-NEURA GLOVE - Dataset Merger
-Merges BLE sensor data and MediaPipe camera data frame-by-frame
-
-This creates training dataset by aligning frames based on frame numbers,
-not timestamps. Assumes both datasets have same number of frames collected
-in the same session.
+NEURA GLOVE - Pose-Based Dataset Merger
+Merges 10-frame sensor and camera data for each pose
 
 Usage:
-    python dataset_merger.py --sensor sensor_data.json --camera camera_data.json --output training_dataset.json
+    python pose_dataset_merger.py --pose fist
+    # Or merge all poses:
+    python pose_dataset_merger.py --all --output data/training_dataset.json
 """
 
 import json
 import argparse
-import numpy as np
 from pathlib import Path
-from typing import List, Dict
 from dataclasses import dataclass, asdict
+from typing import List, Dict
 
 
 # ============================================================================
@@ -26,224 +23,118 @@ from dataclasses import dataclass, asdict
 class TrainingSample:
     """Single training sample with aligned sensor and camera data"""
     frame_number: int
+    pose_name: str
     
     # INPUT: Sensor data (15 features)
-    flex_sensors: List[float]      # 5 values
-    imu_orientation: List[float]   # 4 values (quaternion)
-    imu_accel: List[float]         # 3 values
-    imu_gyro: List[float]          # 3 values
+    flex_sensors: List[float]
+    imu_orientation: List[float]
+    imu_accel: List[float]
+    imu_gyro: List[float]
     
     # OUTPUT: Ground truth from MediaPipe (147 values)
-    joints: List[Dict]  # 21 joints × (3 pos + 4 rot) = 147 values
+    joints: List[Dict]
 
 
 # ============================================================================
-# DATASET MERGER
+# POSE-BASED MERGER
 # ============================================================================
 
-class DatasetMerger:
-    """Merges sensor and camera datasets frame-by-frame"""
+class PoseDatasetMerger:
+    """Merges sensor and camera data for poses (10 frames each)"""
     
     def __init__(self):
-        self.sensor_data = None
-        self.camera_data = None
         self.training_samples: List[TrainingSample] = []
     
-    def load_sensor_data(self, filepath: str):
-        """Load BLE sensor dataset"""
-        print(f"Loading sensor data from: {filepath}")
-        with open(filepath, 'r') as f:
-            self.sensor_data = json.load(f)
+    def merge_pose(self, pose_name: str, data_dir: str = "data"):
+        """Merge sensor and camera data for a single pose"""
+        data_path = Path(data_dir) / pose_name
+        sensor_file = data_path / "sensor_data.json"
+        camera_file = data_path / "camera_data.json"
         
-        print(f"  ✓ Loaded {len(self.sensor_data['frames'])} sensor frames")
-        print(f"    Data type: {self.sensor_data['metadata']['data_type']}")
-        print(f"    Collection date: {self.sensor_data['metadata']['collection_date']}")
-    
-    def load_camera_data(self, filepath: str):
-        """Load MediaPipe camera dataset"""
-        print(f"Loading camera data from: {filepath}")
-        with open(filepath, 'r') as f:
-            self.camera_data = json.load(f)
+        print(f"\nMerging pose: {pose_name}")
+        print("-" * 60)
         
-        print(f"  ✓ Loaded {len(self.camera_data['frames'])} camera frames")
-        print(f"    Data type: {self.camera_data['metadata']['data_type']}")
-        print(f"    Collection date: {self.camera_data['metadata']['collection_date']}")
-    
-    def align_frames(self, method: str = 'min') -> List[TrainingSample]:
-        """
-        Align sensor and camera frames by frame number
-        
-        Args:
-            method: 'min' = use minimum frame count,
-                   'interpolate' = interpolate to match counts
-        
-        Returns:
-            List of aligned training samples
-        """
-        print("\n" + "="*60)
-        print("ALIGNING FRAMES")
-        print("="*60)
-        
-        sensor_frames = self.sensor_data['frames']
-        camera_frames = self.camera_data['frames']
-        
-        num_sensor = len(sensor_frames)
-        num_camera = len(camera_frames)
-        
-        print(f"Sensor frames: {num_sensor}")
-        print(f"Camera frames: {num_camera}")
-        
-        if method == 'min':
-            # Use minimum number of frames - truncate longer dataset
-            num_frames = min(num_sensor, num_camera)
-            print(f"Using method: 'min' - will use {num_frames} frames")
-            
-            if num_sensor > num_frames:
-                print(f"  ⚠ Truncating {num_sensor - num_frames} sensor frames")
-                sensor_frames = sensor_frames[:num_frames]
-            
-            if num_camera > num_frames:
-                print(f"  ⚠ Truncating {num_camera - num_frames} camera frames")
-                camera_frames = camera_frames[:num_frames]
-            
-            # Direct frame-by-frame alignment
-            for i in range(num_frames):
-                sample = TrainingSample(
-                    frame_number=i,
-                    flex_sensors=sensor_frames[i]['flex_sensors'],
-                    imu_orientation=sensor_frames[i]['imu_orientation'],
-                    imu_accel=sensor_frames[i]['imu_accel'],
-                    imu_gyro=sensor_frames[i]['imu_gyro'],
-                    joints=camera_frames[i]['joints']
-                )
-                self.training_samples.append(sample)
-        
-        elif method == 'interpolate':
-            # Interpolate to match frame counts (advanced)
-            print(f"Using method: 'interpolate'")
-            
-            if num_sensor == num_camera:
-                print("  Frame counts match - no interpolation needed")
-                # Direct alignment
-                for i in range(num_sensor):
-                    sample = TrainingSample(
-                        frame_number=i,
-                        flex_sensors=sensor_frames[i]['flex_sensors'],
-                        imu_orientation=sensor_frames[i]['imu_orientation'],
-                        imu_accel=sensor_frames[i]['imu_accel'],
-                        imu_gyro=sensor_frames[i]['imu_gyro'],
-                        joints=camera_frames[i]['joints']
-                    )
-                    self.training_samples.append(sample)
-            
-            elif num_sensor > num_camera:
-                print(f"  More sensor frames - interpolating camera data")
-                # Interpolate camera data to match sensor frames
-                for i in range(num_sensor):
-                    # Find corresponding camera frame index
-                    camera_idx = int(i * num_camera / num_sensor)
-                    camera_idx = min(camera_idx, num_camera - 1)
-                    
-                    sample = TrainingSample(
-                        frame_number=i,
-                        flex_sensors=sensor_frames[i]['flex_sensors'],
-                        imu_orientation=sensor_frames[i]['imu_orientation'],
-                        imu_accel=sensor_frames[i]['imu_accel'],
-                        imu_gyro=sensor_frames[i]['imu_gyro'],
-                        joints=camera_frames[camera_idx]['joints']
-                    )
-                    self.training_samples.append(sample)
-            
-            else:  # num_camera > num_sensor
-                print(f"  More camera frames - interpolating sensor data")
-                # Interpolate sensor data to match camera frames
-                for i in range(num_camera):
-                    # Find corresponding sensor frame index
-                    sensor_idx = int(i * num_sensor / num_camera)
-                    sensor_idx = min(sensor_idx, num_sensor - 1)
-                    
-                    sample = TrainingSample(
-                        frame_number=i,
-                        flex_sensors=sensor_frames[sensor_idx]['flex_sensors'],
-                        imu_orientation=sensor_frames[sensor_idx]['imu_orientation'],
-                        imu_accel=sensor_frames[sensor_idx]['imu_accel'],
-                        imu_gyro=sensor_frames[sensor_idx]['imu_gyro'],
-                        joints=camera_frames[i]['joints']
-                    )
-                    self.training_samples.append(sample)
-        
-        print(f"\n✓ Created {len(self.training_samples)} aligned training samples")
-        print("="*60)
-        
-        return self.training_samples
-    
-    def validate_dataset(self):
-        """Validate the merged dataset"""
-        print("\n" + "="*60)
-        print("DATASET VALIDATION")
-        print("="*60)
-        
-        if not self.training_samples:
-            print("✗ No training samples to validate!")
+        # Check if files exist
+        if not sensor_file.exists():
+            print(f"  ✗ Sensor file not found: {sensor_file}")
             return False
         
-        # Check sample integrity
-        sample = self.training_samples[0]
+        if not camera_file.exists():
+            print(f"  ✗ Camera file not found: {camera_file}")
+            return False
         
-        print(f"Total samples: {len(self.training_samples)}")
-        print(f"\nSample structure:")
-        print(f"  Frame number: {sample.frame_number}")
-        print(f"  Flex sensors: {len(sample.flex_sensors)} values")
-        print(f"  IMU orientation: {len(sample.imu_orientation)} values")
-        print(f"  IMU accel: {len(sample.imu_accel)} values")
-        print(f"  IMU gyro: {len(sample.imu_gyro)} values")
-        print(f"  Total input features: {len(sample.flex_sensors) + len(sample.imu_orientation) + len(sample.imu_accel) + len(sample.imu_gyro)}")
-        print(f"  Joints: {len(sample.joints)} joints")
-        print(f"  Total output values: {len(sample.joints) * 7} (21 joints × 7)")
+        # Load data
+        with open(sensor_file, 'r') as f:
+            sensor_data = json.load(f)
         
-        # Check for missing values
-        has_errors = False
-        for i, sample in enumerate(self.training_samples):
-            if len(sample.flex_sensors) != 5:
-                print(f"  ✗ Frame {i}: Invalid flex sensor count")
-                has_errors = True
-            if len(sample.imu_orientation) != 4:
-                print(f"  ✗ Frame {i}: Invalid quaternion count")
-                has_errors = True
-            if len(sample.joints) != 21:
-                print(f"  ✗ Frame {i}: Invalid joint count")
-                has_errors = True
+        with open(camera_file, 'r') as f:
+            camera_data = json.load(f)
         
-        if not has_errors:
-            print(f"\n✓ All samples validated successfully!")
+        sensor_frames = sensor_data['frames']
+        camera_frames = camera_data['frames']
         
-        # Show sample data
-        print(f"\nExample sample (frame 0):")
-        print(f"  Flex: {sample.flex_sensors}")
-        print(f"  Quaternion: {sample.imu_orientation}")
-        print(f"  First joint (wrist):")
-        print(f"    Position: {sample.joints[0]['position']}")
-        print(f"    Rotation: {sample.joints[0]['rotation']}")
+        print(f"  Sensor frames: {len(sensor_frames)}")
+        print(f"  Camera frames: {len(camera_frames)}")
         
+        # Both should have exactly 10 frames
+        if len(sensor_frames) != 300 or len(camera_frames) != 300:
+            print(f"  ⚠ Warning: Expected 10 frames each, got {len(sensor_frames)} and {len(camera_frames)}")
+        
+        # Merge frame-by-frame
+        num_frames = min(len(sensor_frames), len(camera_frames))
+        
+        for i in range(num_frames):
+            sample = TrainingSample(
+                frame_number=i,
+                pose_name=pose_name,
+                flex_sensors=sensor_frames[i]['flex_sensors'],
+                imu_orientation=sensor_frames[i]['imu_orientation'],
+                imu_accel=sensor_frames[i]['imu_accel'],
+                imu_gyro=sensor_frames[i]['imu_gyro'],
+                joints=camera_frames[i]['joints']
+            )
+            self.training_samples.append(sample)
+        
+        print(f"  ✓ Merged {num_frames} frames for pose '{pose_name}'")
+        return True
+    
+    def merge_all_poses(self, pose_list: List[str], data_dir: str = "data"):
+        """Merge all poses in the list"""
+        print("="*60)
+        print("MERGING ALL POSES")
         print("="*60)
         
-        return not has_errors
+        successful = 0
+        failed = 0
+        
+        for pose in pose_list:
+            if self.merge_pose(pose, data_dir):
+                successful += 1
+            else:
+                failed += 1
+        
+        print()
+        print("="*60)
+        print("MERGE SUMMARY")
+        print("="*60)
+        print(f"  Successful poses: {successful}")
+        print(f"  Failed poses: {failed}")
+        print(f"  Total samples: {len(self.training_samples)}")
+        print("="*60)
     
     def save_training_dataset(self, output_path: str):
         """Save merged training dataset"""
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         
-        # Convert to dict format
         dataset = {
             'metadata': {
                 'total_samples': len(self.training_samples),
-                'input_features': 15,  # 5 flex + 4 quat + 3 accel + 3 gyro
-                'output_values': 147,  # 21 joints × (3 pos + 4 rot)
-                'format': 'frame_aligned_training_data',
-                'description': 'Frame-by-frame aligned sensor and MediaPipe data for LSTM training',
-                'source_sensor': self.sensor_data['metadata']['collection_date'],
-                'source_camera': self.camera_data['metadata']['collection_date']
+                'poses': list(set(s.pose_name for s in self.training_samples)),
+                'samples_per_pose': 300,
+                'input_features': 15,
+                'output_values': 147,
+                'format': 'pose_based_training_data'
             },
             'samples': [asdict(sample) for sample in self.training_samples]
         }
@@ -253,63 +144,7 @@ class DatasetMerger:
         
         print(f"\n✓ Training dataset saved to: {output_file}")
         print(f"  Total samples: {len(self.training_samples)}")
-        print(f"  Input features: 15 per sample")
-        print(f"  Output values: 147 per sample")
-        print(f"  File size: {output_file.stat().st_size / 1024:.2f} KB")
-    
-    def analyze_dataset(self):
-        """Analyze dataset statistics"""
-        print("\n" + "="*60)
-        print("DATASET ANALYSIS")
-        print("="*60)
-        
-        if not self.training_samples:
-            print("No samples to analyze!")
-            return
-        
-        # Extract all flex sensor values for statistics
-        all_flex = []
-        for sample in self.training_samples:
-            all_flex.extend(sample.flex_sensors)
-        
-        all_flex = np.array(all_flex)
-        
-        print("Flex Sensor Statistics:")
-        print(f"  Mean: {np.mean(all_flex):.3f}V")
-        print(f"  Std Dev: {np.std(all_flex):.3f}V")
-        print(f"  Min: {np.min(all_flex):.3f}V")
-        print(f"  Max: {np.max(all_flex):.3f}V")
-        print(f"  Range: {np.max(all_flex) - np.min(all_flex):.3f}V")
-        
-        # Check quaternion magnitudes
-        all_quat_mags = []
-        for sample in self.training_samples:
-            q = np.array(sample.imu_orientation)
-            mag = np.sqrt(np.sum(q**2))
-            all_quat_mags.append(mag)
-        
-        print(f"\nQuaternion Magnitudes:")
-        print(f"  Mean: {np.mean(all_quat_mags):.4f} (should be ~1.0)")
-        print(f"  Std Dev: {np.std(all_quat_mags):.4f}")
-        
-        # Check for hand movement (variance in joint positions)
-        wrist_positions = []
-        for sample in self.training_samples:
-            wrist_positions.append(sample.joints[0]['position'])
-        
-        wrist_positions = np.array(wrist_positions)
-        
-        print(f"\nHand Movement (Wrist Position):")
-        print(f"  X variance: {np.var(wrist_positions[:, 0]):.6f}")
-        print(f"  Y variance: {np.var(wrist_positions[:, 1]):.6f}")
-        print(f"  Z variance: {np.var(wrist_positions[:, 2]):.6f}")
-        
-        if np.var(wrist_positions) < 0.0001:
-            print(f"  ⚠ Warning: Very low variance - hand might be stationary!")
-        else:
-            print(f"  ✓ Good hand movement detected")
-        
-        print("="*60)
+        print(f"  Poses included: {dataset['metadata']['poses']}")
 
 
 # ============================================================================
@@ -318,75 +153,67 @@ class DatasetMerger:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Merge BLE sensor and MediaPipe camera data frame-by-frame'
+        description='Merge BLE sensor and camera data for poses'
     )
     parser.add_argument(
-        '--sensor', '-s',
+        '--pose', '-p',
         type=str,
-        required=True,
-        help='Input sensor data JSON file'
+        help='Single pose to merge'
     )
     parser.add_argument(
-        '--camera', '-c',
+        '--all', '-a',
+        action='store_true',
+        help='Merge all available poses in data directory'
+    )
+    parser.add_argument(
+        '--poses',
+        nargs='+',
+        help='List of poses to merge (e.g., --poses fist open point)'
+    )
+    parser.add_argument(
+        '--data-dir', '-d',
         type=str,
-        required=True,
-        help='Input camera data JSON file'
+        default='data',
+        help='Data directory containing pose folders (default: data)'
     )
     parser.add_argument(
         '--output', '-o',
         type=str,
-        default='training_dataset.json',
-        help='Output training dataset JSON file (default: training_dataset.json)'
-    )
-    parser.add_argument(
-        '--method', '-m',
-        type=str,
-        choices=['min', 'interpolate'],
-        default='min',
-        help='Alignment method: min (truncate) or interpolate (default: min)'
-    )
-    parser.add_argument(
-        '--analyze',
-        action='store_true',
-        help='Perform detailed dataset analysis'
+        default='data/training_dataset.json',
+        help='Output training dataset file'
     )
     
     args = parser.parse_args()
     
-    print("\n" + "="*60)
-    print("NEURA GLOVE - DATASET MERGER")
-    print("="*60)
-    print()
+    merger = PoseDatasetMerger()
     
-    # Create merger
-    merger = DatasetMerger()
+    if args.pose:
+        # Merge single pose
+        if merger.merge_pose(args.pose, args.data_dir):
+            output_file = Path(args.data_dir) / args.pose / "merged_data.json"
+            merger.save_training_dataset(str(output_file))
     
-    # Load datasets
-    merger.load_sensor_data(args.sensor)
-    merger.load_camera_data(args.camera)
+    elif args.poses:
+        # Merge specified poses
+        merger.merge_all_poses(args.poses, args.data_dir)
+        merger.save_training_dataset(args.output)
     
-    # Align frames
-    merger.align_frames(method=args.method)
+    elif args.all:
+        # Find all pose directories
+        data_path = Path(args.data_dir)
+        pose_dirs = [d.name for d in data_path.iterdir() if d.is_dir()]
+        
+        if not pose_dirs:
+            print(f"No pose directories found in {args.data_dir}")
+            return
+        
+        print(f"Found poses: {pose_dirs}")
+        merger.merge_all_poses(pose_dirs, args.data_dir)
+        merger.save_training_dataset(args.output)
     
-    # Validate
-    if not merger.validate_dataset():
-        print("\n✗ Dataset validation failed!")
-        return
-    
-    # Analyze if requested
-    if args.analyze:
-        merger.analyze_dataset()
-    
-    # Save training dataset
-    merger.save_training_dataset(args.output)
-    
-    print("\n" + "="*60)
-    print("SUCCESS!")
-    print("="*60)
-    print(f"Training dataset ready: {args.output}")
-    print(f"Next step: Train model with train_model.py")
-    print("="*60)
-    print()
+    else:
+        print("Please specify --pose, --poses, or --all")
+        parser.print_help()
 
 
 if __name__ == "__main__":
