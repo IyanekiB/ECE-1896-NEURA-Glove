@@ -1,12 +1,6 @@
 """
-NEURA GLOVE - Enhanced Camera Collector (MODIFIED FOR UNITY VR COMPATIBILITY)
+NEURA GLOVE - Enhanced Camera Collector
 Supports multiple dataset collection per pose with 500 frames each
-
-MODIFICATIONS:
-- Uses palm coordinate system from mp_udp_streamer.py
-- Calculates rotations matching Unity VR hand controller expectations
-- Generates 21 quaternions compatible with FrameConstructor
-- Training data format matches inference engine output
 
 Usage:
     # Collect dataset 1 for fist pose
@@ -43,175 +37,11 @@ FRAME_INTERVAL = 1.0 / TARGET_FPS  # 100ms for 10Hz
 
 @dataclass
 class CameraFrame:
-    """Single MediaPipe frame with Unity-compatible format"""
+    """Single MediaPipe frame"""
     frame_number: int
     timestamp: float
     joints: List[dict]
     confidence: float
-    raw_landmarks: List[List[float]]  # Store original landmarks for debugging
-
-
-# ============================================================================
-# ROTATION CALCULATION METHODS (from mp_udp_streamer.py)
-# ============================================================================
-
-class RotationCalculator:
-    """
-    Rotation calculation methods from mp_udp_streamer.py
-    Ensures compatibility with Unity VR hand controller
-    """
-    
-    @staticmethod
-    def calculate_palm_coordinate_system(landmarks):
-        """
-        Create a coordinate system for the palm using finger MCPs.
-        Returns: (palm_forward, palm_right, palm_up) as unit vectors
-        """
-        wrist = landmarks[0]
-        index_mcp = landmarks[5]
-        middle_mcp = landmarks[9]
-        ring_mcp = landmarks[13]
-        pinky_mcp = landmarks[17]
-        
-        # Palm forward: from wrist toward average of finger MCPs
-        palm_center = (index_mcp + middle_mcp + ring_mcp + pinky_mcp) / 4.0
-        palm_forward = palm_center - wrist
-        palm_forward = palm_forward / (np.linalg.norm(palm_forward) + 1e-10)
-        
-        # Palm right: from pinky MCP toward index MCP
-        palm_right = index_mcp - pinky_mcp
-        palm_right = palm_right / (np.linalg.norm(palm_right) + 1e-10)
-        
-        # Palm up: perpendicular to forward and right
-        palm_up = np.cross(palm_forward, palm_right)
-        palm_up = palm_up / (np.linalg.norm(palm_up) + 1e-10)
-        
-        # Re-orthogonalize palm_right to ensure perpendicularity
-        palm_right = np.cross(palm_up, palm_forward)
-        palm_right = palm_right / (np.linalg.norm(palm_right) + 1e-10)
-                
-        return palm_forward, palm_right, palm_up
-    
-    @staticmethod
-    def transform_to_palm_local(landmarks, palm_forward, palm_right, palm_up):
-        """
-        Transform landmarks to palm-local coordinate system
-        """
-        # Build rotation matrix
-        rotation_matrix = np.column_stack([palm_right, palm_up, palm_forward])
-        
-        # Transform all landmarks
-        local_landmarks = []
-        for lm in landmarks:
-            local_lm = rotation_matrix.T @ lm
-            local_landmarks.append(local_lm)
-        
-        return np.array(local_landmarks)
-    
-    @staticmethod
-    def calculate_rotation_from_vectors(v1, v2, angle_scale=1.0):
-        """
-        Calculate quaternion rotation from one vector to another.
-        
-        Args:
-            v1: Starting vector (normalized)
-            v2: Target vector (normalized)
-            angle_scale: Optional scaling factor for the rotation angle
-        
-        Returns: [x, y, z, w] quaternion
-        """
-        axis = np.cross(v1, v2)
-        axis_len = np.linalg.norm(axis)
-        
-        if axis_len > 1e-6:
-            axis = axis / axis_len
-            angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
-            angle = angle * angle_scale
-            
-            half_angle = angle / 2.0
-            s = np.sin(half_angle)
-            c = np.cos(half_angle)
-            
-            return [
-                float(axis[0] * s),
-                float(axis[1] * s),
-                float(axis[2] * s),
-                float(c)
-            ]
-        else:
-            # Vectors are parallel - no rotation needed
-            return [0.0, 0.0, 0.0, 1.0]
-    
-    @staticmethod
-    def project_vector_onto_plane(v, plane_normal):
-        """
-        Project a vector onto a plane defined by its normal.
-        """
-        parallel_component = np.dot(v, plane_normal) * plane_normal
-        projected = v - parallel_component
-        return projected
-    
-    @staticmethod
-    def euler_to_quaternion(euler_x, euler_y, euler_z):
-        """
-        Convert Unity Euler angles (in degrees, XYZ order) to quaternion.
-        """
-        # Convert to radians
-        ex = np.radians(euler_x)
-        ey = np.radians(euler_y)
-        ez = np.radians(euler_z)
-        
-        # Calculate quaternion components
-        cy = np.cos(ey * 0.5)
-        sy = np.sin(ey * 0.5)
-        cp = np.cos(ex * 0.5)
-        sp = np.sin(ex * 0.5)
-        cr = np.cos(ez * 0.5)
-        sr = np.sin(ez * 0.5)
-        
-        w = cr * cp * cy + sr * sp * sy
-        x = sr * cp * cy - cr * sp * sy
-        y = cr * sp * cy + sr * cp * sy
-        z = cr * cp * sy - sr * sp * cy
-        
-        return [float(x), float(y), float(z), float(w)]
-    
-    @staticmethod
-    def calculate_constrained_rotation(v1, v2, hinge_axis):
-        """
-        Calculate rotation constrained to single axis (hinge joint).
-        """
-        # Normalize hinge axis
-        hinge_axis = hinge_axis / (np.linalg.norm(hinge_axis) + 1e-10)
-        
-        # Project vectors onto plane perpendicular to hinge axis
-        v1_proj = RotationCalculator.project_vector_onto_plane(v1, hinge_axis)
-        v2_proj = RotationCalculator.project_vector_onto_plane(v2, hinge_axis)
-        
-        # Normalize projected vectors
-        v1_proj = v1_proj / (np.linalg.norm(v1_proj) + 1e-10)
-        v2_proj = v2_proj / (np.linalg.norm(v2_proj) + 1e-10)
-        
-        # Calculate angle between projected vectors
-        dot_product = np.clip(np.dot(v1_proj, v2_proj), -1.0, 1.0)
-        angle = np.arccos(dot_product)
-        
-        # Determine rotation direction using cross product
-        cross = np.cross(v1_proj, v2_proj)
-        if np.dot(cross, hinge_axis) < 0:
-            angle = -angle
-        
-        # Convert to quaternion
-        half_angle = angle / 2.0
-        s = np.sin(half_angle)
-        c = np.cos(half_angle)
-        
-        return [
-            float(hinge_axis[0] * s),
-            float(hinge_axis[1] * s),
-            float(hinge_axis[2] * s),
-            float(c)
-        ]
 
 
 # ============================================================================
@@ -219,15 +49,14 @@ class RotationCalculator:
 # ============================================================================
 
 class EnhancedCameraCollector:
-    """Collects multiple datasets per pose with MediaPipe using Unity-compatible rotations"""
+    """Collects multiple datasets per pose with MediaPipe"""
     
-    def __init__(self, mirror_image=True):
+    def __init__(self):
         self.mp_hands = mp.solutions.hands
         self.mp_draw = mp.solutions.drawing_utils
         self.hands = None
         self.frames: List[CameraFrame] = []
         self.collection_start_time: float = 0
-        self.mirror_image = mirror_image
         
         # MediaPipe joint structure (21 joints per hand)
         self.finger_chains = [
@@ -237,12 +66,6 @@ class EnhancedCameraCollector:
             [0, 13, 14, 15, 16],  # Ring
             [0, 17, 18, 19, 20]   # Pinky
         ]
-        
-        # Hinge axes (from mp_udp_streamer.py)
-        self.hinge_axis_fingers = np.array([1.0, 0.0, 0.0])  # X-axis for fingers
-        # Thumb has special axis
-        thumb_axis = np.array([1.0, -0.5, 0.0])
-        self.hinge_axis_thumb = thumb_axis / np.linalg.norm(thumb_axis)
     
     def initialize(self):
         """Initialize MediaPipe with optimal settings"""
@@ -255,99 +78,85 @@ class EnhancedCameraCollector:
         )
         print("✓ MediaPipe initialized\n")
     
-    def remap_landmarks_to_unity(self, landmarks):
+    def calculate_rotation(self, point1: np.ndarray, point2: np.ndarray) -> List[float]:
         """
-        Convert MediaPipe coordinates to Unity coordinates.
+        Calculate quaternion rotation from point1 to point2
+        Returns: [x, y, z, w]
         """
-        remapped = np.copy(landmarks)
-        remapped[:, 1] = -remapped[:, 1]  # Flip Y
-        remapped[:, 2] = -remapped[:, 2]  # Flip Z
+        direction = point2 - point1
+        direction = direction / (np.linalg.norm(direction) + 1e-8)
         
-        if self.mirror_image:
-            remapped[:, 0] = -remapped[:, 0]
+        up = np.array([0, -1, 0])
+        right = np.cross(up, direction)
+        right = right / (np.linalg.norm(right) + 1e-8)
+        up = np.cross(direction, right)
         
-        # Center at wrist
-        wrist = remapped[0].copy()
-        remapped = remapped - wrist
-        return remapped
-    
-    def calculate_hand_rotations(self, unity_landmarks):
-        """
-        Calculate 21 quaternion rotations for hand joints.
-        Uses palm coordinate system and constrained rotation for realistic hand poses.
-        """
-        # Calculate palm coordinate system
-        palm_forward, palm_right, palm_up = \
-            RotationCalculator.calculate_palm_coordinate_system(unity_landmarks)
+        # Build rotation matrix
+        rotation_matrix = np.column_stack([right, up, direction])
         
-        # Transform to palm-local space
-        local_landmarks = RotationCalculator.transform_to_palm_local(
-            unity_landmarks, palm_forward, palm_right, palm_up
-        )
+        # Convert to quaternion
+        trace = np.trace(rotation_matrix)
+        if trace > 0:
+            s = 2.0 * np.sqrt(trace + 1.0)
+            w = 0.25 * s
+            x = (rotation_matrix[2,1] - rotation_matrix[1,2]) / s
+            y = (rotation_matrix[0,2] - rotation_matrix[2,0]) / s
+            z = (rotation_matrix[1,0] - rotation_matrix[0,1]) / s
+        else:
+            if rotation_matrix[0,0] > rotation_matrix[1,1] and rotation_matrix[0,0] > rotation_matrix[2,2]:
+                s = 2.0 * np.sqrt(1.0 + rotation_matrix[0,0] - rotation_matrix[1,1] - rotation_matrix[2,2])
+                w = (rotation_matrix[2,1] - rotation_matrix[1,2]) / s
+                x = 0.25 * s
+                y = (rotation_matrix[0,1] + rotation_matrix[1,0]) / s
+                z = (rotation_matrix[0,2] + rotation_matrix[2,0]) / s
+            elif rotation_matrix[1,1] > rotation_matrix[2,2]:
+                s = 2.0 * np.sqrt(1.0 + rotation_matrix[1,1] - rotation_matrix[0,0] - rotation_matrix[2,2])
+                w = (rotation_matrix[0,2] - rotation_matrix[2,0]) / s
+                x = (rotation_matrix[0,1] + rotation_matrix[1,0]) / s
+                y = 0.25 * s
+                z = (rotation_matrix[1,2] + rotation_matrix[2,1]) / s
+            else:
+                s = 2.0 * np.sqrt(1.0 + rotation_matrix[2,2] - rotation_matrix[0,0] - rotation_matrix[1,1])
+                w = (rotation_matrix[1,0] - rotation_matrix[0,1]) / s
+                x = (rotation_matrix[0,2] + rotation_matrix[2,0]) / s
+                y = (rotation_matrix[1,2] + rotation_matrix[2,1]) / s
+                z = 0.25 * s
         
-        rotations = []
-        
-        # Wrist rotation (currently identity)
-        rotations.append([0.0, 0.0, 0.0, 1.0])
-        
-        # Process each finger
-        for chain in self.finger_chains:
-            is_thumb = (chain[0] == 0 and chain[1] == 1)
-            hinge_axis = self.hinge_axis_thumb if is_thumb else self.hinge_axis_fingers
-            
-            for i in range(1, len(chain)):
-                current_idx = chain[i]
-                parent_idx = chain[i-1]
-                
-                # SPECIAL: Thumb metacarpal (CMC joint) - set fixed orientation
-                if is_thumb and i == 1:
-                    thumb_metacarpal_rot = RotationCalculator.euler_to_quaternion(
-                        21.194, 43.526, -69.284
-                    )
-                    rotations.append(thumb_metacarpal_rot)
-                    continue
-                
-                # Check if this joint has a child (not a fingertip)
-                if i + 1 < len(chain):
-                    child_idx = chain[i+1]
-                    
-                    # Calculate vectors between joints in palm-local space
-                    v1 = local_landmarks[current_idx] - local_landmarks[parent_idx]
-                    v2 = local_landmarks[child_idx] - local_landmarks[current_idx]
-                    
-                    # Normalize
-                    v1 = v1 / (np.linalg.norm(v1) + 1e-10)
-                    v2 = v2 / (np.linalg.norm(v2) + 1e-10)
-                    
-                    # Calculate constrained rotation (single-axis hinge)
-                    rotation = RotationCalculator.calculate_constrained_rotation(
-                        v1, v2, hinge_axis
-                    )
-                    
-                    rotations.append(rotation)
-                else:
-                    # Fingertip - no rotation
-                    rotations.append([0.0, 0.0, 0.0, 1.0])
-        
-        return rotations
+        return [float(x), float(y), float(z), float(w)]
     
     def process_landmarks(self, landmarks) -> Tuple[np.ndarray, List[List[float]]]:
         """
-        Extract joint positions and rotations from MediaPipe landmarks.
-        Uses Unity-compatible rotation calculation.
+        Extract joint positions and rotations from MediaPipe landmarks
         
         Returns:
             positions: (21, 3) array of 3D positions
             rotations: List of 21 quaternions [x, y, z, w]
         """
-        # Extract 3D positions (raw MediaPipe format)
+        # Extract 3D positions
         positions = np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark])
         
-        # Remap to Unity coordinate space
-        unity_landmarks = self.remap_landmarks_to_unity(positions)
-        
-        # Calculate rotations using palm coordinate system
-        rotations = self.calculate_hand_rotations(unity_landmarks)
+        # Calculate rotations for each joint
+        rotations = []
+        for i in range(21):
+            if i == 0:
+                # Wrist: use direction to middle finger base
+                rotation = self.calculate_rotation(positions[0], positions[9])
+            else:
+                # Find parent joint
+                parent_idx = None
+                for chain in self.finger_chains:
+                    if i in chain:
+                        chain_pos = chain.index(i)
+                        if chain_pos > 0:
+                            parent_idx = chain[chain_pos - 1]
+                        break
+                
+                if parent_idx is not None:
+                    rotation = self.calculate_rotation(positions[parent_idx], positions[i])
+                else:
+                    rotation = [0.0, 0.0, 0.0, 1.0]
+            
+            rotations.append(rotation)
         
         return positions, rotations
     
@@ -357,7 +166,7 @@ class EnhancedCameraCollector:
         print("   (Make sure your hand is clearly visible to camera)\n")
         
         detection_count = 0
-        required_detections = 5
+        required_detections = 5  # Need 5 consecutive detections
         
         while detection_count < required_detections:
             ret, frame = cap.read()
@@ -380,7 +189,7 @@ class EnhancedCameraCollector:
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
                 )
             else:
-                detection_count = 0
+                detection_count = 0  # Reset if hand lost
                 cv2.putText(
                     frame, 
                     "NO HAND DETECTED - Show your hand", 
@@ -397,50 +206,56 @@ class EnhancedCameraCollector:
     
     def collect_dataset(self, pose_name: str, dataset_num: int,
                        num_frames: int = DEFAULT_FRAMES_PER_POSE, 
-                       display: bool = True) -> List[CameraFrame]:
+                       display: bool = True):
         """
-        Collect dataset for a specific pose.
+        Collect a single dataset for a pose using MediaPipe
         
         Args:
-            pose_name: Name of the pose (e.g., "fist", "open")
+            pose_name: Name of the pose
             dataset_num: Dataset number for this pose
             num_frames: Number of frames to collect
-            display: Whether to show camera feed
-        
-        Returns:
-            List of CameraFrame objects
+            display: Show camera feed during collection
         """
-        print("\n" + "="*70)
-        print(f"COLLECTING DATASET {dataset_num} FOR POSE: {pose_name.upper()}")
-        print("="*70)
-        print(f"  Target frames: {num_frames}")
-        print(f"  Target FPS: {TARGET_FPS} Hz")
-        print(f"  Rotation method: Palm coordinate system (Unity compatible)")
-        print("="*70)
+        print("=" * 70)
+        print(f"CAMERA/MEDIAPIPE COLLECTION")
+        print("=" * 70)
+        print(f"  Pose: {pose_name.upper()}")
+        print(f"  Dataset: #{dataset_num}")
+        print(f"  Target Frames: {num_frames}")
+        print(f"  Sample Rate: {TARGET_FPS}Hz")
+        print(f"  Estimated Duration: {num_frames / TARGET_FPS:.1f}s")
+        print("=" * 70)
+        print()
         
-        # Initialize MediaPipe
         self.initialize()
         
         # Open camera
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            print("❌ Error: Cannot open camera")
-            return []
+            raise Exception("Failed to open camera")
         
-        print("\nCamera opened successfully")
+        # Set camera to 30fps to avoid frame delays
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        print("✓ Camera opened")
         
-        # Wait for stable hand detection
+        # Wait for hand detection
         if not self.wait_for_hand_detection(cap):
+            print("✗ Collection cancelled")
             cap.release()
             cv2.destroyAllWindows()
             return []
         
-        # Countdown
-        print("\nStarting collection in:")
-        for i in range(3, 0, -1):
-            print(f"   {i}...")
-            time.sleep(1)
-        print(" RECORDING!\n")
+        print(f"📌 Instructions:")
+        print(f"   1. Position hand in '{pose_name}' pose")
+        print(f"   2. Hold pose STEADY (match BLE collection)")
+        print(f"   3. Vary the pose slightly (natural movements)")
+        print(f"   4. Collection starts in 3 seconds...")
+        print()
+        
+        time.sleep(3)
+        
+        print("🎬 COLLECTION STARTED")
+        print("-" * 70)
         
         self.collection_start_time = time.time()
         self.frames = []
@@ -464,21 +279,20 @@ class EnhancedCameraCollector:
                 hand_landmarks = results.multi_hand_landmarks[0]
                 positions, rotations = self.process_landmarks(hand_landmarks)
                 
-                # Build joint data (Unity-compatible format)
+                # Build joint data
                 joints = []
                 for j in range(21):
                     joints.append({
                         'joint_id': j,
-                        'position': [0.0, 0.0, 0.0],  # Position set to origin (like Unity VR code)
-                        'rotation': rotations[j]  # Quaternion [x, y, z, w]
+                        'position': positions[j].tolist(),
+                        'rotation': rotations[j]
                     })
                 
                 camera_frame = CameraFrame(
                     frame_number=len(self.frames),
                     timestamp=time.time() - self.collection_start_time,
                     joints=joints,
-                    confidence=1.0,
-                    raw_landmarks=positions.tolist()  # Store raw landmarks for debugging
+                    confidence=1.0
                 )
                 
                 self.frames.append(camera_frame)
@@ -493,12 +307,9 @@ class EnhancedCameraCollector:
                 if (i + 1) % 50 == 0 or i == 0:
                     progress = (i + 1) / num_frames * 100
                     elapsed = time.time() - self.collection_start_time
-                    # Show first rotation as sample
-                    sample_rot = rotations[5]  # Index MCP rotation
                     print(f"  Frame {i+1:3d}/{num_frames} ({progress:5.1f}%) ✓ | "
                           f"Time: {elapsed:6.2f}s | "
-                          f"Sample Quat: [{sample_rot[0]:.3f}, {sample_rot[1]:.3f}, "
-                          f"{sample_rot[2]:.3f}, {sample_rot[3]:.3f}]")
+                          f"Wrist: [{positions[0][0]:.3f}, {positions[0][1]:.3f}, {positions[0][2]:.3f}]")
                 
                 failed_detections = 0
             else:
@@ -518,10 +329,6 @@ class EnhancedCameraCollector:
                 cv2.putText(
                     frame, f"Frame: {len(self.frames)}/{num_frames}", 
                     (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
-                )
-                cv2.putText(
-                    frame, "Using Unity-compatible rotations", 
-                    (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1
                 )
                 cv2.imshow(f'Collecting: {pose_name}', frame)
                 cv2.waitKey(1)
@@ -547,7 +354,6 @@ class EnhancedCameraCollector:
         print(f"  Target FPS: {TARGET_FPS} Hz")
         print(f"  Actual FPS: {actual_fps:.2f} Hz")
         print(f"  Success Rate: {len(self.frames)/num_frames*100:.1f}%")
-        print(f"  Rotation Method: Palm coordinate system (Unity VR compatible)")
         print("=" * 70)
         print()
         
@@ -556,7 +362,7 @@ class EnhancedCameraCollector:
     def save_dataset(self, frames: List[CameraFrame], pose_name: str, 
                     dataset_num: int, output_dir: str = "data"):
         """
-        Save dataset to JSON file with Unity-compatible format.
+        Save dataset to JSON file
         
         File structure: data/{pose_name}/camera_data_{dataset_num}.json
         """
@@ -572,15 +378,11 @@ class EnhancedCameraCollector:
                 'collection_date': datetime.now().isoformat(),
                 'total_frames': len(frames),
                 'target_fps': TARGET_FPS,
-                'data_type': 'MEDIAPIPE_CAMERA_UNITY_COMPATIBLE',
-                'rotation_method': 'palm_coordinate_system',
-                'mirror_image': self.mirror_image,
+                'data_type': 'MEDIAPIPE_CAMERA',
                 'joint_config': {
                     'num_joints': 21,
-                    'features_per_joint': 7,  # 3 position + 4 rotation quaternion
-                    'total_features': 147,
-                    'position_format': '[x, y, z] (always [0,0,0] in this format)',
-                    'rotation_format': '[x, y, z, w] quaternion (Unity compatible)'
+                    'features_per_joint': 7,  # 3 position + 4 rotation
+                    'total_features': 147
                 }
             },
             'frames': [asdict(frame) for frame in frames]
@@ -592,7 +394,6 @@ class EnhancedCameraCollector:
         print(f"💾 Saved to: {output_file}")
         print(f"   Frames: {len(frames)}")
         print(f"   Size: {output_file.stat().st_size / 1024:.1f} KB")
-        print(f"   Format: Unity VR compatible (FrameConstructor ready)")
 
 
 # ============================================================================
@@ -601,7 +402,7 @@ class EnhancedCameraCollector:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Collect camera/MediaPipe data for hand pose training (Unity VR compatible)'
+        description='Collect camera/MediaPipe data for hand pose training'
     )
     parser.add_argument(
         '--pose', '-p',
@@ -630,16 +431,11 @@ def main():
         action='store_true',
         help='Disable camera feed display'
     )
-    parser.add_argument(
-        '--no-mirror',
-        action='store_true',
-        help='Disable X-axis mirroring'
-    )
     
     args = parser.parse_args()
     
     # Create collector
-    collector = EnhancedCameraCollector(mirror_image=not args.no_mirror)
+    collector = EnhancedCameraCollector()
     
     # Collect dataset
     frames = collector.collect_dataset(
@@ -655,7 +451,7 @@ def main():
         print(f"\n✅ SUCCESS! Dataset {args.dataset_num} for '{args.pose}' collected")
         print(f"\n📋 Next steps:")
         print(f"   1. Collect more datasets for this pose:")
-        print(f"      python enhanced_camera_collector.py --pose {args.pose} --dataset-num {args.dataset_num + 1}")
+        print(f"      python enhanced_ble_collector.py --pose {args.pose} --dataset-num {args.dataset_num + 1}")
         print(f"   2. Or merge all datasets and train:")
         print(f"      python enhanced_merger.py --all")
         print(f"      python enhanced_trainer.py --dataset data/training_dataset.json")

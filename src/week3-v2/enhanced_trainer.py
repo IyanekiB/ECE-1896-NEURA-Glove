@@ -552,10 +552,23 @@ class EnhancedTrainer:
         # Print classification report
         print("\n📋 Classification Report:")
         print("="*70)
-        report = classification_report(self.val_true_labels, self.val_pred_labels,
-                                      target_names=self.pose_names, digits=3)
-        print(report)
+        # report = classification_report(self.val_true_labels, self.val_pred_labels,
+        #                               target_names=self.pose_names, digits=3)
+        # print(report)
+        
+        # Ensure we only use labels actually present in validation set
+        unique_labels = sorted(set(self.val_true_labels))
+        label_names = [self.pose_names[i] for i in unique_labels]
 
+        report = classification_report(
+            self.val_true_labels,
+            self.val_pred_labels,
+            labels=unique_labels,
+            target_names=label_names,
+            digits=3,
+            zero_division=0
+        )
+        print(report)
 
 # ============================================================================
 # CLI

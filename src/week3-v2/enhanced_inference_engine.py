@@ -1,23 +1,24 @@
 """
-NEURA GLOVE - Enhanced Real-time Inference Engine with UDP Streaming
-Continuous hand pose estimation + UDP streaming to Unity VR
+NEURA GLOVE - Enhanced Real-time Inference Engine with Pose Detection
+Continuous hand pose estimation + discrete pose classification with confidence
 
-MODIFICATIONS:
-- Added UDP streaming using FrameConstructor (compatible with mp_udp_streamer.py)
-- Converts 147 predicted values to 21 quaternions
-- Sends to Unity at same address/port as mp_udp_streamer.py
-- Maintains pose detection functionality
-- Compatible with Unity Hand Controller from VR module
+ENHANCEMENTS:
+- Added pose detection with confidence scores
+- Display current pose and confidence in real-time
+- Option to send pose classification data to Unity
+- Configurable confidence threshold for pose detection
 
 Usage:
-    # Run inference with UDP streaming to Unity
+    # Run inference with pose detection
     python enhanced_inference_engine.py --model models/best_model.pth
     
-    # Adjust Unity IP if on different machine
-    python enhanced_inference_engine.py --model models/best_model.pth --unity-ip 192.168.1.100
+    # Adjust smoothing and confidence threshold
+    python enhanced_inference_engine.py --model models/best_model.pth \
+                                        --kalman-process-noise 0.005 \
+                                        --confidence-threshold 0.7
     
-    # Disable UDP streaming (use named pipes instead)
-    python enhanced_inference_engine.py --model models/best_model.pth --no-udp
+    # Send pose data to Unity
+    python enhanced_inference_engine.py --model models/best_model.pth --send-pose-to-unity
 """
 
 import asyncio
@@ -25,99 +26,15 @@ import json
 import time
 import argparse
 import numpy as np
-import socket
 from pathlib import Path
 from collections import deque
 from typing import Optional, List, Tuple
 import struct
-import sys
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from bleak import BleakClient, BleakScanner
-
-
-# Import FrameConstructor from uploaded file (must be in same directory or PYTHONPATH)
-# For this implementation, we'll inline a copy of FrameConstructor
-class FrameConstructor:
-    """
-    Frame constructor compatible with Unity VR Hand Controller
-    Builds frames from 21 quaternion rotations
-    """
-    
-    @staticmethod
-    def _zero_pos_rot(rotation):
-        return {
-            "position": [0, 0, 0],
-            "rotation": [float(rotation[0]), float(rotation[1]), float(rotation[2]), float(rotation[3])]
-        }
-
-    @staticmethod
-    def build_frame_from_rotations(rotations, hand="left"):
-        """
-        Build a frame matching Unity VR format from a list of 21 quaternions.
-
-        rotations: list[21] of [x, y, z, w] quaternions corresponding to MediaPipe landmarks indices 0..20
-        hand: "left" or "right"
-        """
-
-        if rotations is None or len(rotations) != 21:
-            raise ValueError("rotations must be a list of length 21")
-
-        # MediaPipe indices mapping to bones
-        # 0: wrist
-        # Thumb: 1(CMC),2(MCP),3(IP),4(Tip)
-        # Index: 5(MCP),6(PIP),7(DIP),8(Tip)
-        # Middle: 9(MCP),10(PIP),11(DIP),12(Tip)
-        # Ring: 13(MCP),14(PIP),15(DIP),16(Tip)
-        # Pinky: 17(MCP),18(PIP),19(DIP),20(Tip)
-
-        frame = {
-            "timestamp": time.time(),
-            "hand": hand,
-            "wrist": {
-                "position": [0, 0, 0],
-                "rotation": [
-                    float(rotations[0][0]),
-                    float(rotations[0][1]),
-                    float(rotations[0][2]),
-                    float(rotations[0][3])
-                ]
-            },
-            "thumb": {
-                "metacarpal": FrameConstructor._zero_pos_rot(rotations[1]),
-                "proximal": FrameConstructor._zero_pos_rot(rotations[2]),
-                "intermediate": FrameConstructor._zero_pos_rot(rotations[3]),
-                "distal": FrameConstructor._zero_pos_rot(rotations[4])
-            },
-            "index": {
-                "metacarpal": FrameConstructor._zero_pos_rot(rotations[5]),
-                "proximal": FrameConstructor._zero_pos_rot(rotations[6]),
-                "intermediate": FrameConstructor._zero_pos_rot(rotations[7]),
-                "distal": FrameConstructor._zero_pos_rot(rotations[8])
-            },
-            "middle": {
-                "metacarpal": FrameConstructor._zero_pos_rot(rotations[9]),
-                "proximal": FrameConstructor._zero_pos_rot(rotations[10]),
-                "intermediate": FrameConstructor._zero_pos_rot(rotations[11]),
-                "distal": FrameConstructor._zero_pos_rot(rotations[12])
-            },
-            "ring": {
-                "metacarpal": FrameConstructor._zero_pos_rot(rotations[13]),
-                "proximal": FrameConstructor._zero_pos_rot(rotations[14]),
-                "intermediate": FrameConstructor._zero_pos_rot(rotations[15]),
-                "distal": FrameConstructor._zero_pos_rot(rotations[16])
-            },
-            "pinky": {
-                "metacarpal": FrameConstructor._zero_pos_rot(rotations[17]),
-                "proximal": FrameConstructor._zero_pos_rot(rotations[18]),
-                "intermediate": FrameConstructor._zero_pos_rot(rotations[19]),
-                "distal": FrameConstructor._zero_pos_rot(rotations[20])
-            }
-        }
-
-        return frame
 
 
 # ============================================================================
@@ -126,30 +43,35 @@ class FrameConstructor:
 
 class TrainingConfig:
     """Training configuration (needed for loading checkpoint)"""
+    # Sequence parameters
     SEQUENCE_LENGTH: int = 10
+    
+    # LSTM architecture
     LSTM_HIDDEN_SIZE: int = 256
     LSTM_NUM_LAYERS: int = 3
     LSTM_DROPOUT: float = 0.3
+    
+    # Input/Output
     INPUT_SIZE: int = 15
     OUTPUT_SIZE: int = 147
+    
+    # Training hyperparameters
     BATCH_SIZE: int = 32
     LEARNING_RATE: float = 0.001
     NUM_EPOCHS: int = 150
     TRAIN_SPLIT: float = 0.85
+    
+    # Calibration hyperparameters
     CALIBRATION_LEARNING_RATE: float = 0.0001
     CALIBRATION_EPOCHS: int = 20
 
 
-PIPE_NAME = "/tmp/neura_glove_pipe"  # Named pipe for Unity communication (legacy)
+PIPE_NAME = "/tmp/neura_glove_pipe"  # Named pipe for Unity communication
 POSE_PIPE_NAME = "/tmp/neura_glove_pose_pipe"  # Separate pipe for pose data
 SEQUENCE_LENGTH = 10
 INPUT_SIZE = 15
 OUTPUT_SIZE = 147  # 21 joints × 7 (3 position + 4 rotation quaternion)
-TARGET_FPS = 30
-
-# UDP Configuration (matching mp_udp_streamer.py)
-DEFAULT_UNITY_IP = '127.0.0.1'
-DEFAULT_UNITY_PORT = 5555
+TARGET_FPS = 30  # Increased for smoother VR interaction
 
 
 # ============================================================================
@@ -212,34 +134,54 @@ class PoseDetector:
         self.pose_names = pose_names
         self.confidence_threshold = confidence_threshold
         self.smoothing_window = smoothing_window
+        
+        # History for temporal smoothing
         self.pose_history = deque(maxlen=smoothing_window)
         self.confidence_history = deque(maxlen=smoothing_window)
         
     def detect_pose(self, pose_logits: np.ndarray) -> Tuple[str, float, dict]:
-        """Detect pose from classification logits"""
+        """
+        Detect pose from classification logits
+        
+        Args:
+            pose_logits: Raw output from classification head
+            
+        Returns:
+            pose_name: Name of detected pose
+            confidence: Confidence score (0-1)
+            all_confidences: Dictionary of all pose confidences
+        """
+        # Convert logits to probabilities using softmax
         pose_probs = F.softmax(torch.FloatTensor(pose_logits), dim=0).numpy()
+        
+        # Get top prediction
         pred_idx = np.argmax(pose_probs)
         confidence = pose_probs[pred_idx]
         pose_name = self.pose_names[pred_idx]
         
+        # Create confidence dict for all poses
         all_confidences = {
             self.pose_names[i]: float(pose_probs[i])
             for i in range(len(self.pose_names))
         }
         
+        # Add to history for smoothing
         self.pose_history.append(pose_name)
         self.confidence_history.append(confidence)
         
+        # Get smoothed pose (most common in recent history)
         if len(self.pose_history) >= self.smoothing_window:
             from collections import Counter
             pose_counts = Counter(self.pose_history)
             smoothed_pose = pose_counts.most_common(1)[0][0]
             smoothed_confidence = np.mean(list(self.confidence_history))
+            
             return smoothed_pose, smoothed_confidence, all_confidences
         
         return pose_name, confidence, all_confidences
     
     def is_confident(self, confidence: float) -> bool:
+        """Check if confidence exceeds threshold"""
         return confidence >= self.confidence_threshold
 
 
@@ -253,392 +195,336 @@ class KalmanFilter:
     def __init__(self, dim: int, process_noise: float = 0.01, 
                  measurement_noise: float = 0.1):
         self.dim = dim
-        self.state = np.zeros(dim)
-        self.covariance = np.eye(dim)
-        self.process_noise = process_noise * np.eye(dim)
-        self.measurement_noise = measurement_noise * np.eye(dim)
+        self.x = np.zeros(dim)  # State
+        self.P = np.eye(dim)    # Covariance
+        self.Q = np.eye(dim) * process_noise      # Process noise
+        self.R = np.eye(dim) * measurement_noise  # Measurement noise
         self.initialized = False
     
     def update(self, measurement: np.ndarray) -> np.ndarray:
+        """Update with new measurement"""
         if not self.initialized:
-            self.state = measurement
+            self.x = measurement
             self.initialized = True
-            return self.state
+            return self.x
         
-        # Prediction
-        predicted_state = self.state
-        predicted_covariance = self.covariance + self.process_noise
+        # Predict (assuming constant state)
+        x_pred = self.x
+        P_pred = self.P + self.Q
         
         # Update
-        innovation = measurement - predicted_state
-        innovation_covariance = predicted_covariance + self.measurement_noise
-        kalman_gain = predicted_covariance @ np.linalg.inv(innovation_covariance)
+        K = P_pred @ np.linalg.inv(P_pred + self.R)
+        self.x = x_pred + K @ (measurement - x_pred)
+        self.P = (np.eye(self.dim) - K) @ P_pred
         
-        self.state = predicted_state + kalman_gain @ innovation
-        self.covariance = (np.eye(self.dim) - kalman_gain) @ predicted_covariance
-        
-        return self.state
+        return self.x
 
 
 # ============================================================================
-# DATA CONVERSION UTILITIES
-# ============================================================================
-
-class DataConverter:
-    """Convert between 147-value format and 21-quaternion format"""
-    
-    @staticmethod
-    def joint_data_to_rotations(joint_data: np.ndarray) -> List[List[float]]:
-        """
-        Convert 147-value joint data to 21 quaternions.
-        
-        joint_data: Array of 147 values (21 joints × 7 values each)
-                    Each joint: [x_pos, y_pos, z_pos, qx, qy, qz, qw]
-        
-        Returns: List of 21 quaternions [[x, y, z, w], ...]
-        """
-        rotations = []
-        
-        for i in range(21):
-            start_idx = i * 7
-            # Extract quaternion (skip position values at indices 0-2)
-            qx = float(joint_data[start_idx + 3])
-            qy = float(joint_data[start_idx + 4])
-            qz = float(joint_data[start_idx + 5])
-            qw = float(joint_data[start_idx + 6])
-            
-            rotations.append([qx, qy, qz, qw])
-        
-        return rotations
-    
-    @staticmethod
-    def normalize_quaternion(q: List[float]) -> List[float]:
-        """Normalize a quaternion to unit length"""
-        qx, qy, qz, qw = q
-        magnitude = np.sqrt(qx*qx + qy*qy + qz*qz + qw*qw)
-        if magnitude < 1e-6:
-            return [0.0, 0.0, 0.0, 1.0]  # Identity quaternion
-        return [qx/magnitude, qy/magnitude, qz/magnitude, qw/magnitude]
-
-
-# ============================================================================
-# ENHANCED INFERENCE ENGINE
+# INFERENCE ENGINE
 # ============================================================================
 
 class EnhancedInferenceEngine:
-    """Real-time inference with UDP streaming to Unity"""
+    """Real-time inference with Unity streaming and pose detection"""
     
-    def __init__(self, model_path: str, device_name: str = 'ESP32-BLE',
-                 confidence_threshold: float = 0.6,
-                 send_pose_to_unity: bool = False,
-                 kalman_process_noise: float = 0.01,
-                 unity_ip: str = DEFAULT_UNITY_IP,
-                 unity_port: int = DEFAULT_UNITY_PORT,
-                 use_udp: bool = True):
-        
-        self.model_path = model_path
+    def __init__(self, model_path: str, device_name: str = "ESP32-BLE",
+                 confidence_threshold: float = 0.6, send_pose_to_unity: bool = False,
+                 kalman_process_noise: float = 0.01):
         self.device_name = device_name
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.send_pose_to_unity = send_pose_to_unity
-        self.use_udp = use_udp
         
-        # UDP setup
-        self.unity_ip = unity_ip
-        self.unity_port = unity_port
-        self.udp_socket = None
-        if self.use_udp:
-            self.setup_udp()
+        # Load model
+        print(f"🔥 Loading model: {model_path}")
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         
-        # BLE
-        self.client: Optional[BleakClient] = None
-        self.char_uuid = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-        self.latest_data = None
+        # Get model config
+        config = checkpoint['config']
+        self.pose_names = checkpoint['pose_names']
+        self.idx_to_pose = {idx: name for name, idx in checkpoint['pose_to_idx'].items()}
         
-        # Model
-        self.model = None
-        self.pose_names = []
-        self.load_model()
+        # Initialize model
+        self.model = HandPoseLSTM(
+            lstm_hidden_size=config.LSTM_HIDDEN_SIZE,
+            lstm_num_layers=config.LSTM_NUM_LAYERS,
+            lstm_dropout=config.LSTM_DROPOUT,
+            num_poses=len(self.pose_names)
+        ).to(self.device)
         
-        # Pose detection
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.eval()
+        
+        print(f"  ✓ Model loaded ({sum(p.numel() for p in self.model.parameters()):,} parameters)")
+        print(f"  ✓ Trained poses: {self.pose_names}")
+        print(f"  ✓ Device: {self.device}")
+        
+        # Initialize pose detector
         self.pose_detector = PoseDetector(
-            self.pose_names, 
-            confidence_threshold=confidence_threshold
+            pose_names=self.pose_names,
+            confidence_threshold=confidence_threshold,
+            smoothing_window=5
         )
+        print(f"  ✓ Pose detector initialized (confidence threshold: {confidence_threshold})")
         
-        # Kalman filter
-        self.kalman = KalmanFilter(OUTPUT_SIZE, process_noise=kalman_process_noise)
-        
-        # Buffering
+        # Sensor sequence buffer
         self.sensor_buffer = deque(maxlen=SEQUENCE_LENGTH)
         
-        # Named pipes (legacy support)
+        # Kalman filters for each joint feature
+        self.kalman_filters = [
+            KalmanFilter(1, kalman_process_noise, 0.1) 
+            for _ in range(OUTPUT_SIZE)
+        ]
+        
+        # BLE connection
+        self.service_uuid = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+        self.char_uuid = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+        self.client: Optional[BleakClient] = None
+        self.latest_data: Optional[bytearray] = None
+        
+        # Unity pipes
         self.joint_pipe = None
         self.pose_pipe = None
         
         # Statistics
         self.frame_count = 0
         self.start_time = 0
+        self.pose_stats = {pose: 0 for pose in self.pose_names}
+        
+        # Current pose tracking
         self.current_pose = "unknown"
         self.current_confidence = 0.0
-        self.pose_stats = {pose: 0 for pose in self.pose_names}
     
-    def setup_udp(self):
-        """Setup UDP socket for Unity communication"""
-        try:
-            self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            print(f"✓ UDP socket created for Unity streaming")
-            print(f"  Target: {self.unity_ip}:{self.unity_port}")
-        except Exception as e:
-            print(f"❌ Failed to create UDP socket: {e}")
-            self.udp_socket = None
-    
-    def send_udp_to_unity(self, rotations: List[List[float]]):
-        """
-        Send joint rotations to Unity via UDP using FrameConstructor format.
+    async def find_device(self) -> str:
+        """Scan for ESP32"""
+        print(f"🔍 Scanning for {self.device_name}...")
+        devices = await BleakScanner.discover(timeout=10.0)
         
-        Args:
-            rotations: List of 21 quaternions [[x, y, z, w], ...]
-        """
-        if not self.udp_socket:
+        for device in devices:
+            if device.name and self.device_name in device.name:
+                print(f"  ✓ Found: {device.name} at {device.address}")
+                return device.address
+        
+        raise Exception(f"Device {self.device_name} not found")
+    
+    def notification_handler(self, sender, data):
+        """BLE notification handler"""
+        self.latest_data = data
+    
+    def parse_sensor_data(self, data: bytearray) -> Optional[np.ndarray]:
+        """Parse sensor data from ESP32"""
+        try:
+            data_str = data.decode('utf-8').strip()
+            values = [float(x) for x in data_str.split(',')]
+            
+            if len(values) != 15:
+                return None
+            
+            return np.array(values, dtype=np.float32)
+        except:
+            return None
+    
+    async def connect_glove(self):
+        """Connect to ESP32 glove"""
+        address = await self.find_device()
+        self.client = BleakClient(address)
+        await self.client.connect()
+        print("  ✓ Connected")
+        
+        await self.client.start_notify(self.char_uuid, self.notification_handler)
+        
+        # Wait for initial data
+        print("  ⏳ Waiting for sensor data...")
+        await asyncio.sleep(0.5)
+        
+        if self.latest_data is None:
+            raise Exception("No data received from glove")
+        
+        print("  ✓ Receiving data")
+    
+    def setup_unity_pipes(self):
+        """Setup named pipes for Unity communication (Unix/Linux/Mac only)"""
+        import os
+        import sys
+        
+        print("\n🔗 Setting up Unity communication pipes...")
+        
+        # Check if running on Windows
+        if sys.platform == 'win32':
+            print("\n⚠️  WARNING: Named pipes are not supported on Windows in this version.")
+            print("   Unity integration is disabled for this session.")
+            print("\n   For Windows support, you have two options:")
+            print("   1. Run this script in WSL (Windows Subsystem for Linux)")
+            print("   2. Use the original inference_engine.py without pose detection")
+            print("\n   The script will continue WITHOUT Unity integration.")
+            print("   Pose detection will still work and display in console.\n")
+            
+            # Disable Unity pipes on Windows
+            self.joint_pipe = None
+            self.pose_pipe = None
+            return
+        
+        # Unix/Linux/Mac named pipes
+        # Joint data pipe
+        if os.path.exists(PIPE_NAME):
+            os.remove(PIPE_NAME)
+        os.mkfifo(PIPE_NAME)
+        print(f"  ✓ Created joint pipe: {PIPE_NAME}")
+        
+        # Pose data pipe (optional)
+        if self.send_pose_to_unity:
+            if os.path.exists(POSE_PIPE_NAME):
+                os.remove(POSE_PIPE_NAME)
+            os.mkfifo(POSE_PIPE_NAME)
+            print(f"  ✓ Created pose pipe: {POSE_PIPE_NAME}")
+        
+        print(f"  ⏳ Waiting for Unity to connect...")
+        
+        # Open pipes (blocks until Unity connects)
+        self.joint_pipe = open(PIPE_NAME, 'wb', buffering=0)
+        print(f"  ✓ Unity connected to joint pipe!")
+        
+        if self.send_pose_to_unity:
+            self.pose_pipe = open(POSE_PIPE_NAME, 'wb', buffering=0)
+            print(f"  ✓ Unity connected to pose pipe!")
+    
+    def send_joints_to_unity(self, joint_data: np.ndarray):
+        """Send continuous joint data to Unity via pipe"""
+        if self.joint_pipe is None:
             return
         
         try:
-            # Normalize all quaternions
-            normalized_rotations = [
-                DataConverter.normalize_quaternion(r) for r in rotations
-            ]
+            # Convert to bytes (147 floats = 588 bytes)
+            joint_bytes = joint_data.astype(np.float32).tobytes()
             
-            # Build frame using FrameConstructor
-            frame = FrameConstructor.build_frame_from_rotations(
-                normalized_rotations, 
-                hand="left"
-            )
+            # Create packet: size + joint_data
+            packet = struct.pack('I', len(joint_bytes)) + joint_bytes
             
-            # Convert to JSON and send
-            json_data = json.dumps(frame)
-            self.udp_socket.sendto(
-                json_data.encode('utf-8'),
-                (self.unity_ip, self.unity_port)
-            )
-            
-        except Exception as e:
-            print(f"❌ Error sending UDP to Unity: {e}")
-    
-    def load_model(self):
-        """Load trained model from checkpoint"""
-        print(f"\n📂 Loading model from: {self.model_path}")
-        
-        # PyTorch 2.6+ compatibility: weights_only=False for custom classes
-        checkpoint = torch.load(self.model_path, map_location='cpu', weights_only=False)
-        
-        # Extract pose names
-        self.pose_names = checkpoint.get('pose_names', ['fist', 'open', 'point', 'peace', 'thumbs_up'])
-        num_poses = len(self.pose_names)
-        
-        # Load config
-        config = checkpoint.get('config', TrainingConfig())
-        
-        # Create model
-        self.model = HandPoseLSTM(
-            lstm_hidden_size=config.LSTM_HIDDEN_SIZE,
-            lstm_num_layers=config.LSTM_NUM_LAYERS,
-            lstm_dropout=config.LSTM_DROPOUT,
-            num_poses=num_poses
-        )
-        
-        # Load weights
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.eval()
-        
-        print(f"✓ Model loaded successfully")
-        print(f"  Poses: {', '.join(self.pose_names)}")
-        print(f"  Architecture: LSTM({config.LSTM_HIDDEN_SIZE}, {config.LSTM_NUM_LAYERS} layers)")
-    
-    def setup_unity_pipes(self):
-        """Setup named pipes for Unity (legacy support)"""
-        try:
-            import os
-            if not os.path.exists(PIPE_NAME):
-                os.mkfifo(PIPE_NAME)
-            self.joint_pipe = open(PIPE_NAME, 'w')
-            
-            if self.send_pose_to_unity:
-                if not os.path.exists(POSE_PIPE_NAME):
-                    os.mkfifo(POSE_PIPE_NAME)
-                self.pose_pipe = open(POSE_PIPE_NAME, 'w')
-            
-            print("✓ Named pipes setup complete")
-        except Exception as e:
-            print(f"⚠️  Named pipe setup failed: {e}")
+            self.joint_pipe.write(packet)
+            self.joint_pipe.flush()
+        except BrokenPipeError:
+            print("\n⚠️  Unity disconnected from joint pipe")
             self.joint_pipe = None
-            self.pose_pipe = None
     
-    async def connect_glove(self):
-        """Connect to NEURA Glove via BLE"""
-        print(f"\n🔍 Scanning for {self.device_name}...")
+    def send_pose_to_unity_pipe(self, pose_name: str, confidence: float, 
+                                all_confidences: dict):
+        """Send pose classification data to Unity via separate pipe"""
+        if self.pose_pipe is None:
+            return
         
-        devices = await BleakScanner.discover(timeout=5.0)
-        target_device = None
-        
-        for device in devices:
-            if device.name == self.device_name:
-                target_device = device
-                break
-        
-        if not target_device:
-            raise Exception(f"Device {self.device_name} not found")
-        
-        print(f"✓ Found device: {target_device.name} ({target_device.address})")
-        print(f"Connecting...")
-        
-        self.client = BleakClient(target_device.address)
-        await self.client.connect()
-        
-        if not self.client.is_connected:
-            raise Exception("Failed to connect")
-        
-        print("✓ Connected to glove")
-        
-        # Start notifications
-        await self.client.start_notify(self.char_uuid, self.notification_handler)
-        print("✓ Notifications enabled")
-    
-    def notification_handler(self, sender, data):
-        """Handle BLE notifications"""
-        self.latest_data = data
-    
-    def parse_sensor_data(self, data: bytes) -> Optional[np.ndarray]:
-        """Parse sensor data from BLE packet"""
         try:
-            if len(data) < 60:
-                return None
+            # Create JSON payload
+            pose_data = {
+                'pose': pose_name,
+                'confidence': float(confidence),
+                'all_confidences': all_confidences,
+                'timestamp': time.time()
+            }
             
-            # 5 flex sensors (float32)
-            flex_values = struct.unpack('<5f', data[0:20])
+            # Convert to JSON string and encode
+            json_str = json.dumps(pose_data)
+            json_bytes = json_str.encode('utf-8')
             
-            # IMU quaternion (float32 x 4)
-            quat_values = struct.unpack('<4f', data[20:36])
+            # Create packet: size + json_data
+            packet = struct.pack('I', len(json_bytes)) + json_bytes
             
-            # Accelerometer (float32 x 3)
-            accel_values = struct.unpack('<3f', data[36:48])
-            
-            # Gyroscope (float32 x 3)
-            gyro_values = struct.unpack('<3f', data[48:60])
-            
-            # Combine into 15-element array
-            sensor_data = np.array(
-                list(flex_values) + list(quat_values) + 
-                list(accel_values) + list(gyro_values),
-                dtype=np.float32
-            )
-            
-            return sensor_data
-            
-        except Exception as e:
-            return None
+            self.pose_pipe.write(packet)
+            self.pose_pipe.flush()
+        except BrokenPipeError:
+            print("\n⚠️  Unity disconnected from pose pipe")
+            self.pose_pipe = None
     
     def predict(self, sensor_sequence: np.ndarray) -> Tuple[np.ndarray, str, float, dict]:
         """
-        Run inference on sensor sequence.
+        Run inference on sensor sequence for continuous hand pose + pose classification
+        
+        Args:
+            sensor_sequence: (10, 15) array of sensor readings
         
         Returns:
-            joint_data: 147-value array (smoothed)
+            joint_data: (147,) array of CONTINUOUS joint values
             pose_name: Detected pose name
-            confidence: Pose confidence
-            all_confidences: All pose confidences
+            confidence: Confidence score for detected pose
+            all_confidences: Dict of all pose confidences
         """
-        with torch.no_grad():
-            # Prepare input
-            x = torch.FloatTensor(sensor_sequence).unsqueeze(0)
-            
-            # Forward pass
-            joint_pred, pose_pred = self.model(x)
-            
-            # Extract predictions
-            joint_data = joint_pred.squeeze().numpy()
-            pose_logits = pose_pred.squeeze().numpy()
-            
-            # Apply Kalman smoothing
-            joint_data = self.kalman.update(joint_data)
-            
-            # Detect pose
-            pose_name, confidence, all_confidences = \
-                self.pose_detector.detect_pose(pose_logits)
-            
-            return joint_data, pose_name, confidence, all_confidences
-    
-    def send_joints_to_unity(self, joint_data: np.ndarray):
-        """Send joint data to Unity (UDP or named pipe)"""
-        if self.use_udp and self.udp_socket:
-            # Convert 147 values to 21 quaternions
-            rotations = DataConverter.joint_data_to_rotations(joint_data)
-            # Send via UDP
-            self.send_udp_to_unity(rotations)
+        # Convert to tensor
+        x = torch.FloatTensor(sensor_sequence).unsqueeze(0).to(self.device)
         
-        # Also send via named pipe if available (legacy support)
-        if self.joint_pipe:
-            try:
-                packet = {
-                    'timestamp': time.time(),
-                    'joints': joint_data.tolist()
-                }
-                self.joint_pipe.write(json.dumps(packet) + '\n')
-                self.joint_pipe.flush()
-            except:
-                pass
-    
-    def send_pose_to_unity_pipe(self, pose_name: str, confidence: float, 
-                                 all_confidences: dict):
-        """Send pose data to Unity via named pipe"""
-        if self.pose_pipe:
-            try:
-                packet = {
-                    'timestamp': time.time(),
-                    'pose': pose_name,
-                    'confidence': float(confidence),
-                    'all_confidences': all_confidences
-                }
-                self.pose_pipe.write(json.dumps(packet) + '\n')
-                self.pose_pipe.flush()
-            except:
-                pass
+        # Inference
+        with torch.no_grad():
+            joint_pred, pose_pred = self.model(x)
+        
+        # Get continuous joint predictions
+        joint_data = joint_pred.cpu().numpy()[0]
+        
+        # Apply Kalman filtering for smooth motion
+        filtered_joint_data = np.zeros_like(joint_data)
+        for i in range(OUTPUT_SIZE):
+            filtered_joint_data[i] = self.kalman_filters[i].update(
+                np.array([joint_data[i]])
+            )[0]
+        
+        # Get pose classification
+        pose_logits = pose_pred.cpu().numpy()[0]
+        pose_name, confidence, all_confidences = self.pose_detector.detect_pose(pose_logits)
+        
+        return filtered_joint_data, pose_name, confidence, all_confidences
     
     def display_pose_info(self, pose_name: str, confidence: float, 
                          all_confidences: dict, frame_num: int):
-        """Display detailed pose information"""
-        print(f"\n{'='*60}")
-        print(f"Frame {frame_num} - Pose Detection")
-        print(f"{'='*60}")
-        print(f"  Primary Pose: {pose_name}")
-        print(f"  Confidence: {confidence*100:.1f}%")
-        print(f"\n  All Pose Confidences:")
-        for pose, conf in sorted(all_confidences.items(), key=lambda x: x[1], reverse=True):
-            bar_len = int(conf * 20)
-            bar = '█' * bar_len
-            print(f"    {pose:12s}: {conf*100:5.1f}% {bar}")
-        print(f"{'='*60}\n")
-    
-    async def run(self, display_interval: int = 100, verbose_pose: bool = True,
-                  no_unity: bool = False):
-        """Main inference loop"""
+        """Display pose detection information"""
+        # Confidence bar visualization
+        bar_length = 20
+        filled = int(bar_length * confidence)
+        bar = '█' * filled + '░' * (bar_length - filled)
         
+        # Confidence color indicator
+        if confidence >= 0.8:
+            conf_indicator = "🟢"
+        elif confidence >= 0.6:
+            conf_indicator = "🟡"
+        else:
+            conf_indicator = "🔴"
+        
+        # Display current pose
+        print(f"\n{'='*70}")
+        print(f"Frame {frame_num:5d} | Detected Pose: {pose_name.upper():12s} {conf_indicator}")
+        print(f"{'='*70}")
+        print(f"Confidence: [{bar}] {confidence*100:.1f}%")
+        print(f"\nAll Pose Confidences:")
+        
+        # Sort and display all confidences
+        sorted_confidences = sorted(all_confidences.items(), 
+                                   key=lambda x: x[1], reverse=True)
+        for pose, conf in sorted_confidences:
+            mini_bar_len = 15
+            mini_filled = int(mini_bar_len * conf)
+            mini_bar = '▓' * mini_filled + '░' * (mini_bar_len - mini_filled)
+            marker = "◄" if pose == pose_name else " "
+            print(f"  {pose:12s}: [{mini_bar}] {conf*100:5.1f}% {marker}")
+        print(f"{'='*70}\n")
+    
+    async def run(self, display_interval: int = 100, verbose_pose: bool = True, no_unity: bool = False):
+        """Main inference loop with pose detection"""
         print("\n" + "="*70)
-        print("STARTING ENHANCED INFERENCE WITH UDP STREAMING")
+        print("STARTING ENHANCED INFERENCE WITH POSE DETECTION")
         print("="*70)
-        print("Mode: Continuous joint prediction + UDP streaming to Unity")
+        print("Mode: Continuous joint prediction + Discrete pose classification")
         print(f"Poses: {', '.join(self.pose_names)}")
         print(f"Confidence threshold: {self.pose_detector.confidence_threshold}")
-        if self.use_udp:
-            print(f"UDP Target: {self.unity_ip}:{self.unity_port}")
         print("="*70)
         
         # Connect to glove
         await self.connect_glove()
         
         # Setup Unity pipes (unless disabled)
-        if not no_unity and not self.use_udp:
+        if not no_unity:
             self.setup_unity_pipes()
+        else:
+            print("\n⚠️  Unity integration disabled (--no-unity flag)")
+            self.joint_pipe = None
+            self.pose_pipe = None
         
-        print("\n🎬 Running inference with UDP streaming...")
+        print("\n🎬 Running inference with pose detection...")
         print(f"   Target: {TARGET_FPS} Hz")
         print("   Press Ctrl+C to stop")
         print("-"*70)
@@ -700,14 +586,9 @@ class EnhancedInferenceEngine:
                                 conf_emoji = "🟢" if confidence >= 0.8 else \
                                            "🟡" if confidence >= 0.6 else "🔴"
                                 
-                                # Show sample rotation
-                                rotations = DataConverter.joint_data_to_rotations(joint_data)
-                                sample_rot = rotations[5]  # Index MCP
-                                
                                 print(f"Frame {self.frame_count:5d} | FPS: {fps:5.1f} | "
                                       f"Pose: {pose_name:12s} {conf_emoji} {confidence*100:5.1f}% | "
-                                      f"Sample Quat: [{sample_rot[0]:.2f}, {sample_rot[1]:.2f}, "
-                                      f"{sample_rot[2]:.2f}, {sample_rot[3]:.2f}]")
+                                      f"Joint Sample: [{joint_data[0]:.2f}, {joint_data[1]:.2f}, {joint_data[2]:.2f}]")
                 
                 # Maintain target FPS
                 elapsed = time.time() - loop_start
@@ -722,9 +603,6 @@ class EnhancedInferenceEngine:
             if self.client and self.client.is_connected:
                 await self.client.stop_notify(self.char_uuid)
                 await self.client.disconnect()
-            
-            if self.udp_socket:
-                self.udp_socket.close()
             
             if self.joint_pipe:
                 self.joint_pipe.close()
@@ -743,8 +621,6 @@ class EnhancedInferenceEngine:
             print(f"  Duration: {elapsed:.2f}s")
             print(f"  Average FPS: {avg_fps:.2f}")
             print(f"  Target FPS: {TARGET_FPS}")
-            if self.use_udp:
-                print(f"  UDP Target: {self.unity_ip}:{self.unity_port}")
             print()
             print("Pose Distribution (confident detections only):")
             total_confident = sum(self.pose_stats.values())
@@ -763,21 +639,21 @@ class EnhancedInferenceEngine:
 
 async def main():
     parser = argparse.ArgumentParser(
-        description='NEURA Glove enhanced real-time inference with UDP streaming',
+        description='NEURA Glove enhanced real-time inference with pose detection',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage with UDP streaming
+  # Basic usage
   python enhanced_inference_engine.py --model models/best_model.pth
-  
-  # Specify Unity IP if on different machine
-  python enhanced_inference_engine.py --model models/best_model.pth --unity-ip 192.168.1.100
-  
-  # Use named pipes instead of UDP
-  python enhanced_inference_engine.py --model models/best_model.pth --no-udp
   
   # Adjust confidence threshold
   python enhanced_inference_engine.py --model models/best_model.pth --confidence-threshold 0.7
+  
+  # Send pose data to Unity
+  python enhanced_inference_engine.py --model models/best_model.pth --send-pose-to-unity
+  
+  # Less verbose output
+  python enhanced_inference_engine.py --model models/best_model.pth --display-interval 200 --no-verbose-pose
         """
     )
     
@@ -785,18 +661,12 @@ Examples:
                        help='Path to trained model (.pth file)')
     parser.add_argument('--device', default='ESP32-BLE',
                        help='BLE device name (default: ESP32-BLE)')
-    parser.add_argument('--unity-ip', default=DEFAULT_UNITY_IP,
-                       help=f'Unity IP address (default: {DEFAULT_UNITY_IP})')
-    parser.add_argument('--unity-port', type=int, default=DEFAULT_UNITY_PORT,
-                       help=f'Unity UDP port (default: {DEFAULT_UNITY_PORT})')
-    parser.add_argument('--no-udp', action='store_true',
-                       help='Disable UDP streaming (use named pipes instead)')
     parser.add_argument('--confidence-threshold', type=float, default=0.6,
                        help='Confidence threshold for pose detection (0-1, default: 0.6)')
     parser.add_argument('--send-pose-to-unity', action='store_true',
                        help='Send pose classification data to Unity via separate pipe')
     parser.add_argument('--no-unity', action='store_true',
-                       help='Skip Unity setup (useful for testing)')
+                       help='Skip Unity setup (useful for testing pose detection only)')
     parser.add_argument('--kalman-process-noise', type=float, default=0.01,
                        help='Kalman filter process noise (default: 0.01)')
     parser.add_argument('--display-interval', type=int, default=100,
@@ -819,10 +689,7 @@ Examples:
         device_name=args.device,
         confidence_threshold=args.confidence_threshold,
         send_pose_to_unity=args.send_pose_to_unity,
-        kalman_process_noise=args.kalman_process_noise,
-        unity_ip=args.unity_ip,
-        unity_port=args.unity_port,
-        use_udp=not args.no_udp
+        kalman_process_noise=args.kalman_process_noise
     )
     await engine.run(
         display_interval=args.display_interval,
