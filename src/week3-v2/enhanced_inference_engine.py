@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from bleak import BleakClient, BleakScanner
-
+from unity_udp_bridge import UnityUDPBridge
 
 # ============================================================================
 # CONFIGURATION
@@ -228,8 +228,9 @@ class EnhancedInferenceEngine:
     """Real-time inference with Unity streaming and pose detection"""
     
     def __init__(self, model_path: str, device_name: str = "ESP32-BLE",
-                 confidence_threshold: float = 0.6, send_pose_to_unity: bool = False,
-                 kalman_process_noise: float = 0.01):
+                confidence_threshold: float = 0.6, send_pose_to_unity: bool = False,
+                kalman_process_noise: float = 0.01,
+                unity_ip: str = '127.0.0.1', unity_port: int = 5555):
         self.device_name = device_name
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.send_pose_to_unity = send_pose_to_unity
@@ -281,7 +282,12 @@ class EnhancedInferenceEngine:
         self.client: Optional[BleakClient] = None
         self.latest_data: Optional[bytearray] = None
         
-        # Unity pipes
+        # Unity communication (UDP instead of pipes)
+        self.unity_ip = unity_ip
+        self.unity_port = unity_port
+        self.unity_bridge = None  # Will be initialized in setup
+        
+        # Legacy pipe support (for reference only, not used)
         self.joint_pipe = None
         self.pose_pipe = None
         
@@ -341,69 +347,101 @@ class EnhancedInferenceEngine:
         
         print("  ✓ Receiving data")
     
-    def setup_unity_pipes(self):
-        """Setup named pipes for Unity communication (Unix/Linux/Mac only)"""
-        import os
-        import sys
+    # def setup_unity_pipes(self):
+    #     """Setup named pipes for Unity communication (Unix/Linux/Mac only)"""
+    #     import os
+    #     import sys
         
-        print("\n🔗 Setting up Unity communication pipes...")
+    #     print("\n🔗 Setting up Unity communication pipes...")
         
-        # Check if running on Windows
-        if sys.platform == 'win32':
-            print("\n⚠️  WARNING: Named pipes are not supported on Windows in this version.")
-            print("   Unity integration is disabled for this session.")
-            print("\n   For Windows support, you have two options:")
-            print("   1. Run this script in WSL (Windows Subsystem for Linux)")
-            print("   2. Use the original inference_engine.py without pose detection")
-            print("\n   The script will continue WITHOUT Unity integration.")
-            print("   Pose detection will still work and display in console.\n")
+    #     # Check if running on Windows
+    #     if sys.platform == 'win32':
+    #         print("\n⚠️  WARNING: Named pipes are not supported on Windows in this version.")
+    #         print("   Unity integration is disabled for this session.")
+    #         print("\n   For Windows support, you have two options:")
+    #         print("   1. Run this script in WSL (Windows Subsystem for Linux)")
+    #         print("   2. Use the original inference_engine.py without pose detection")
+    #         print("\n   The script will continue WITHOUT Unity integration.")
+    #         print("   Pose detection will still work and display in console.\n")
             
-            # Disable Unity pipes on Windows
-            self.joint_pipe = None
-            self.pose_pipe = None
-            return
+    #         # Disable Unity pipes on Windows
+    #         self.joint_pipe = None
+    #         self.pose_pipe = None
+    #         return
         
-        # Unix/Linux/Mac named pipes
-        # Joint data pipe
-        if os.path.exists(PIPE_NAME):
-            os.remove(PIPE_NAME)
-        os.mkfifo(PIPE_NAME)
-        print(f"  ✓ Created joint pipe: {PIPE_NAME}")
+    #     # Unix/Linux/Mac named pipes
+    #     # Joint data pipe
+    #     if os.path.exists(PIPE_NAME):
+    #         os.remove(PIPE_NAME)
+    #     os.mkfifo(PIPE_NAME)
+    #     print(f"  ✓ Created joint pipe: {PIPE_NAME}")
         
-        # Pose data pipe (optional)
-        if self.send_pose_to_unity:
-            if os.path.exists(POSE_PIPE_NAME):
-                os.remove(POSE_PIPE_NAME)
-            os.mkfifo(POSE_PIPE_NAME)
-            print(f"  ✓ Created pose pipe: {POSE_PIPE_NAME}")
+    #     # Pose data pipe (optional)
+    #     if self.send_pose_to_unity:
+    #         if os.path.exists(POSE_PIPE_NAME):
+    #             os.remove(POSE_PIPE_NAME)
+    #         os.mkfifo(POSE_PIPE_NAME)
+    #         print(f"  ✓ Created pose pipe: {POSE_PIPE_NAME}")
         
-        print(f"  ⏳ Waiting for Unity to connect...")
+    #     print(f"  ⏳ Waiting for Unity to connect...")
         
-        # Open pipes (blocks until Unity connects)
-        self.joint_pipe = open(PIPE_NAME, 'wb', buffering=0)
-        print(f"  ✓ Unity connected to joint pipe!")
+    #     # Open pipes (blocks until Unity connects)
+    #     self.joint_pipe = open(PIPE_NAME, 'wb', buffering=0)
+    #     print(f"  ✓ Unity connected to joint pipe!")
         
-        if self.send_pose_to_unity:
-            self.pose_pipe = open(POSE_PIPE_NAME, 'wb', buffering=0)
-            print(f"  ✓ Unity connected to pose pipe!")
+    #     if self.send_pose_to_unity:
+    #         self.pose_pipe = open(POSE_PIPE_NAME, 'wb', buffering=0)
+    #         print(f"  ✓ Unity connected to pose pipe!")
+
+    def setup_unity_connection(self):
+        """Setup UDP connection to Unity (cross-platform)"""
+        print("\n🔗 Setting up Unity UDP communication...")
+        
+        try:
+            self.unity_bridge = UnityUDPBridge(self.unity_ip, self.unity_port)
+            print(f"  ✓ UDP bridge ready on {self.unity_ip}:{self.unity_port}")
+            print(f"  → Start Unity to receive hand data")
+            print(f"  → Unity should listen on UDP port {self.unity_port}")
+            
+            # Note: UDP doesn't require waiting for connection like named pipes
+            # Unity can start before or after this script
+            
+        except Exception as e:
+            print(f"  ✗ Failed to setup UDP bridge: {e}")
+            print(f"  → Continuing without Unity integration")
+            self.unity_bridge = None
     
+    # def send_joints_to_unity(self, joint_data: np.ndarray):
+    #     """Send continuous joint data to Unity via pipe"""
+    #     if self.joint_pipe is None:
+    #         return
+        
+    #     try:
+    #         # Convert to bytes (147 floats = 588 bytes)
+    #         joint_bytes = joint_data.astype(np.float32).tobytes()
+            
+    #         # Create packet: size + joint_data
+    #         packet = struct.pack('I', len(joint_bytes)) + joint_bytes
+            
+    #         self.joint_pipe.write(packet)
+    #         self.joint_pipe.flush()
+    #     except BrokenPipeError:
+    #         print("\n⚠️  Unity disconnected from joint pipe")
+    #         self.joint_pipe = None
+
     def send_joints_to_unity(self, joint_data: np.ndarray):
-        """Send continuous joint data to Unity via pipe"""
-        if self.joint_pipe is None:
+        """Send continuous joint data to Unity via UDP"""
+        if self.unity_bridge is None:
             return
         
         try:
-            # Convert to bytes (147 floats = 588 bytes)
-            joint_bytes = joint_data.astype(np.float32).tobytes()
+            # Send via UDP bridge (converts 147 floats to JSON automatically)
+            self.unity_bridge.send_to_unity(joint_data, hand="left")
             
-            # Create packet: size + joint_data
-            packet = struct.pack('I', len(joint_bytes)) + joint_bytes
-            
-            self.joint_pipe.write(packet)
-            self.joint_pipe.flush()
-        except BrokenPipeError:
-            print("\n⚠️  Unity disconnected from joint pipe")
-            self.joint_pipe = None
+        except Exception as e:
+            # Only print occasional errors to avoid spam
+            if self.frame_count % 100 == 0:
+                print(f"\n⚠️  Unity UDP error: {e}")
     
     def send_pose_to_unity_pipe(self, pose_name: str, confidence: float, 
                                 all_confidences: dict):
@@ -518,7 +556,7 @@ class EnhancedInferenceEngine:
         
         # Setup Unity pipes (unless disabled)
         if not no_unity:
-            self.setup_unity_pipes()
+            self.setup_unity_connection()
         else:
             print("\n⚠️  Unity integration disabled (--no-unity flag)")
             self.joint_pipe = None
@@ -603,7 +641,16 @@ class EnhancedInferenceEngine:
             if self.client and self.client.is_connected:
                 await self.client.stop_notify(self.char_uuid)
                 await self.client.disconnect()
-            
+
+            # Close UDP bridge
+            if self.unity_bridge:
+                stats = self.unity_bridge.get_stats()
+                print(f"\nUDP Bridge Statistics:")
+                print(f"  Packets sent: {stats['packets_sent']}")
+                print(f"  Errors: {stats['errors']}")
+                print(f"  Success rate: {stats['success_rate']*100:.1f}%")
+                self.unity_bridge.close()
+
             if self.joint_pipe:
                 self.joint_pipe.close()
             if self.pose_pipe:
@@ -675,6 +722,10 @@ Examples:
                        help='Show detailed pose info every 30 frames (default)')
     parser.add_argument('--no-verbose-pose', dest='verbose_pose', action='store_false',
                        help='Disable detailed pose display')
+    parser.add_argument('--unity-ip', type=str, default='127.0.0.1',
+                       help='Unity IP address (default: 127.0.0.1 for localhost)')
+    parser.add_argument('--unity-port', type=int, default=5555,
+                       help='Unity UDP port (default: 5555)')
     parser.set_defaults(verbose_pose=True)
     
     args = parser.parse_args()
@@ -689,7 +740,9 @@ Examples:
         device_name=args.device,
         confidence_threshold=args.confidence_threshold,
         send_pose_to_unity=args.send_pose_to_unity,
-        kalman_process_noise=args.kalman_process_noise
+        kalman_process_noise=args.kalman_process_noise,
+        unity_ip=args.unity_ip,      # NEW
+        unity_port=args.unity_port   # NEW
     )
     await engine.run(
         display_interval=args.display_interval,
