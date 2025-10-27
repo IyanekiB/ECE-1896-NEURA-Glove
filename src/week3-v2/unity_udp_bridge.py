@@ -48,7 +48,7 @@ class UnityUDPBridge:
         self.packet_count = 0
         self.error_count = 0
         
-        print(f"âœ“ UDP Bridge initialized: {unity_ip}:{unity_port}")
+        print(f"UDP Bridge initialized: {unity_ip}:{unity_port}")
     
     def normalize_quaternion(self, quat: np.ndarray) -> np.ndarray:
         """
@@ -325,7 +325,7 @@ class UnityUDPBridge:
     def close(self):
         """Close UDP socket"""
         self.sock.close()
-        print(f"\nâœ“ UDP Bridge closed")
+        print(f"\nUDP Bridge closed")
         print(f"  Total packets sent: {self.packet_count}")
         print(f"  Total errors: {self.error_count}")
 
@@ -386,16 +386,16 @@ def test_bridge():
             assert data[finger][joint]["position"] == [0, 0, 0], \
                 f"{finger}.{joint} position should be [0, 0, 0], got {data[finger][joint]['position']}"
     
-    print("âœ“ Structure validation passed")
-    print("âœ“ ALL positions correctly set to [0, 0, 0] (FrameConstructor format)")
+    print("Structure validation passed")
+    print("ALL positions correctly set to [0, 0, 0] (FrameConstructor format)")
     
     # Send test packet
     print("\nSending test packet to Unity...")
     success = bridge.send_to_unity(joint_data)
     if success:
-        print("âœ“ Packet sent successfully")
+        print("Packet sent successfully")
     else:
-        print("âœ— Failed to send packet")
+        print("Failed to send packet")
     
     # Print stats
     print("\nBridge Statistics:")
