@@ -38,7 +38,7 @@ class TrainingSample:
     imu_accel: List[float]
     imu_gyro: List[float]
     
-    # OUTPUT: Ground truth from MediaPipe (147 values = 21 joints × 7)
+    # OUTPUT: Ground truth from MediaPipe (147 values = 21 joints Ã— 7)
     joints: List[Dict]
 
 
@@ -93,11 +93,11 @@ class EnhancedDatasetMerger:
         
         # Check if both files exist
         if not sensor_file.exists():
-            print(f"    ✗ Missing sensor file: {sensor_file.name}")
+            print(f"    âœ— Missing sensor file: {sensor_file.name}")
             return 0
         
         if not camera_file.exists():
-            print(f"    ✗ Missing camera file: {camera_file.name}")
+            print(f"    âœ— Missing camera file: {camera_file.name}")
             return 0
         
         # Load data
@@ -108,12 +108,16 @@ class EnhancedDatasetMerger:
             camera_data = json.load(f)
         
         sensor_frames = sensor_data['frames']
-        camera_frames = camera_data['frames']
+        # Camera data has 'samples' not 'frames'
+        camera_frames = camera_data.get('samples', camera_data.get('frames', []))
         
         # Merge frame-by-frame
         num_frames = min(len(sensor_frames), len(camera_frames))
         
         for i in range(num_frames):
+            # Camera data has 'joint_angles' not 'joints'
+            joints = camera_frames[i].get('joint_angles', camera_frames[i].get('joints'))
+            
             sample = TrainingSample(
                 frame_number=i,
                 pose_name=pose_name,
@@ -122,11 +126,11 @@ class EnhancedDatasetMerger:
                 imu_orientation=sensor_frames[i]['imu_orientation'],
                 imu_accel=sensor_frames[i]['imu_accel'],
                 imu_gyro=sensor_frames[i]['imu_gyro'],
-                joints=camera_frames[i]['joints']
+                joints=joints
             )
             self.training_samples.append(sample)
         
-        print(f"    ✓ Dataset {dataset_num}: {num_frames} frames merged")
+        print(f"    âœ“ Dataset {dataset_num}: {num_frames} frames merged")
         return num_frames
     
     def merge_pose(self, pose_name: str, data_dir: str = "data") -> bool:
@@ -144,7 +148,7 @@ class EnhancedDatasetMerger:
         dataset_nums = self.find_datasets_for_pose(pose_name, data_dir)
         
         if not dataset_nums:
-            print(f"  ✗ No datasets found for pose '{pose_name}'")
+            print(f"  âœ— No datasets found for pose '{pose_name}'")
             return False
         
         print(f"  Found {len(dataset_nums)} dataset(s): {dataset_nums}")
@@ -177,13 +181,13 @@ class EnhancedDatasetMerger:
         # Find all pose directories
         data_path = Path(data_dir)
         if not data_path.exists():
-            print(f"✗ Data directory not found: {data_dir}")
+            print(f"âœ— Data directory not found: {data_dir}")
             return
         
         pose_dirs = [d.name for d in data_path.iterdir() if d.is_dir()]
         
         if not pose_dirs:
-            print(f"✗ No pose directories found in {data_dir}")
+            print(f"âœ— No pose directories found in {data_dir}")
             return
         
         print(f"\nFound {len(pose_dirs)} pose(s): {sorted(pose_dirs)}")
@@ -241,7 +245,7 @@ class EnhancedDatasetMerger:
                 'total_poses': len(poses),
                 'poses': poses,
                 'input_features': 15,  # 5 flex + 4 quat + 3 accel + 3 gyro
-                'output_features': 147,  # 21 joints × 7 (3 pos + 4 rot)
+                'output_features': 147,  # 21 joints Ã— 7 (3 pos + 4 rot)
                 'format': 'multi_dataset_training_data',
                 'pose_statistics': stats_per_pose
             },
@@ -251,7 +255,7 @@ class EnhancedDatasetMerger:
         with open(output_file, 'w') as f:
             json.dump(dataset, f, indent=2)
         
-        print(f"\n💾 Training dataset saved!")
+        print(f"\nðŸ’¾ Training dataset saved!")
         print(f"   File: {output_file}")
         print(f"   Size: {output_file.stat().st_size / (1024*1024):.2f} MB")
         print(f"   Total samples: {len(self.training_samples)}")
@@ -298,7 +302,7 @@ def main():
         if merger.merge_pose(args.pose, args.data_dir):
             merger.save_training_dataset(args.output)
         else:
-            print(f"\n✗ Failed to merge pose '{args.pose}'")
+            print(f"\nâœ— Failed to merge pose '{args.pose}'")
     
     elif args.all:
         # Merge all poses
@@ -307,12 +311,12 @@ def main():
         if len(merger.training_samples) > 0:
             merger.save_training_dataset(args.output)
             
-            print(f"\n✅ SUCCESS!")
-            print(f"\n📋 Next step:")
+            print(f"\nâœ… SUCCESS!")
+            print(f"\nðŸ“‹ Next step:")
             print(f"   Train the model:")
             print(f"   python enhanced_trainer.py --dataset {args.output} --epochs 150")
         else:
-            print(f"\n✗ No samples to save")
+            print(f"\nâœ— No samples to save")
     
     else:
         print("Please specify --pose or --all")

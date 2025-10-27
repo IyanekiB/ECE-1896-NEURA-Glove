@@ -10,15 +10,15 @@ ENHANCEMENTS:
 
 Usage:
     # Run inference with pose detection
-    python enhanced_inference_engine.py --model models/best_model.pth
+    python enhanced_inference_engine.py --model models1/best_model.pth
     
     # Adjust smoothing and confidence threshold
-    python enhanced_inference_engine.py --model models/best_model.pth \
+    python enhanced_inference_engine.py --model models1/best_model.pth \
                                         --kalman-process-noise 0.005 \
                                         --confidence-threshold 0.7
     
     # Send pose data to Unity
-    python enhanced_inference_engine.py --model models/best_model.pth --send-pose-to-unity
+    python enhanced_inference_engine.py --model models1/best_model.pth --send-pose-to-unity
 """
 
 import asyncio

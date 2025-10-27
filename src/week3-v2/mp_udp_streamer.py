@@ -4,13 +4,15 @@ import numpy as np
 import json
 import socket
 import time
+import argparse
 from FrameConstructor import FrameConstructor
 
 
 class HandDataStreamer:
     """Streams hand landmark data to Unity VR via UDP"""
     
-    def __init__(self, unity_ip='127.0.0.1', unity_port=5555, mirror_image=True, save_training_data=False):
+    def __init__(self, unity_ip='127.0.0.1', unity_port=5555, mirror_image=True, 
+                 save_training_data=False, output_filename=None, max_frames=None):
         # Initialize MediaPipe Hands
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
@@ -41,6 +43,7 @@ class HandDataStreamer:
         # Stats
         self.frame_count = 0
         self.start_time = time.time()
+        self.max_frames = max_frames
         # Logging
         self.log_interval_seconds = 0.5
         self._next_frame_log_time = self.start_time + self.log_interval_seconds
@@ -48,10 +51,15 @@ class HandDataStreamer:
         # AI Training Data Collection
         self.save_training_data = save_training_data
         if self.save_training_data:
-            timestamp_str = time.strftime("%Y%m%d_%H%M%S")
-            self.training_data_file = f"training_data_{timestamp_str}.json"
+            if output_filename:
+                self.training_data_file = output_filename
+            else:
+                timestamp_str = time.strftime("%Y%m%d_%H%M%S")
+                self.training_data_file = f"training_data_{timestamp_str}.json"
             self.training_data_samples = []
             print(f"Training data will be saved to: {self.training_data_file}")
+            if max_frames:
+                print(f"Will collect {max_frames} frames")
     
     def get_hand_landmarks(self, frame):
         """
@@ -393,7 +401,7 @@ class HandDataStreamer:
     #                     bone_dir = bone_dir / (np.linalg.norm(bone_dir) + 1e-10)
                         
     #                     # Expected thumb direction: angled between forward and right
-    #                     expected_dir = (palm_forward * 0.5 + palm_right * 0.866)  # ~30° angle
+    #                     expected_dir = (palm_forward * 0.5 + palm_right * 0.866)  # ~30Â° angle
     #                     expected_dir = expected_dir / (np.linalg.norm(expected_dir) + 1e-10)
                         
     #                     rotation = self.calculate_rotation_from_vectors(expected_dir, bone_dir, 1.0)
@@ -577,7 +585,7 @@ class HandDataStreamer:
         palm_forward_flat = palm_forward_flat / (np.linalg.norm(palm_forward_flat) + 1e-10)
 
         # Calculate yaw angle (rotation around Y axis)
-        # Calculate angle using atan2 for full 360° range
+        # Calculate angle using atan2 for full 360Â° range
         yaw = -1*np.arctan2(palm_forward_flat[0], palm_forward_flat[2])
         
         # Convert yaw angle to quaternion (rotation around Y axis)
@@ -654,10 +662,10 @@ class HandDataStreamer:
         try:
             with open(self.training_data_file, 'w') as f:
                 json.dump(output, f, indent=2)
-            print(f"\n✓ Training data saved: {self.training_data_file}")
+            print(f"\nâœ“ Training data saved: {self.training_data_file}")
             print(f"  Total samples: {len(self.training_data_samples)}")
         except Exception as e:
-            print(f"\n✗ Error saving training data: {e}")
+            print(f"\nâœ— Error saving training data: {e}")
     
     def stream(self, show_video=True):
         """
@@ -666,9 +674,16 @@ class HandDataStreamer:
         cap = cv2.VideoCapture(0)
         
         print("Starting hand tracking stream...")
+        if self.max_frames:
+            print(f"Will stop after collecting {self.max_frames} frames")
         print("Press 'q' to quit")
         
         while True:
+            # Check if max_frames reached
+            if self.max_frames and self.frame_count >= self.max_frames:
+                print(f"\nReached target of {self.max_frames} frames. Stopping...")
+                break
+            
             ret, frame = cap.read()
             if not ret:
                 print("Failed to grab frame")
@@ -698,8 +713,15 @@ class HandDataStreamer:
                 fps = self.frame_count / (time.time() - self.start_time)
                 cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(frame, f"Frames: {self.frame_count}", (10, 60),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Show progress if max_frames is set
+                if self.max_frames:
+                    cv2.putText(frame, f"Frames: {self.frame_count}/{self.max_frames}", (10, 60),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                else:
+                    cv2.putText(frame, f"Frames: {self.frame_count}", (10, 60),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
                 cv2.putText(frame, f"Streaming to {self.unity_address[0]}:{self.unity_address[1]}", 
                            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 
@@ -725,15 +747,34 @@ class HandDataStreamer:
 
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Hand tracking data streamer with training data collection')
+    parser.add_argument('--frames', type=int, default=None, 
+                        help='Number of frames to collect (default: unlimited)')
+    parser.add_argument('--output', type=str, default=None,
+                        help='Output filename (e.g., camera_data_1.json, camera_data_2.json)')
+    parser.add_argument('--no-save', action='store_true',
+                        help='Disable training data saving')
+    parser.add_argument('--ip', type=str, default='127.0.0.1',
+                        help='Unity IP address (default: 127.0.0.1)')
+    parser.add_argument('--port', type=int, default=5555,
+                        help='Unity port (default: 5555)')
+    parser.add_argument('--no-video', action='store_true',
+                        help='Disable video display')
+    
+    args = parser.parse_args()
+    
     # Configuration
-    SAVE_TRAINING_DATA = False  # Set to True to save joint angle training data to JSON
+    SAVE_TRAINING_DATA = not args.no_save
 
-    # Create streamer (change IP if Unity is on different machine)
+    # Create streamer
     streamer = HandDataStreamer(
-        unity_ip='127.0.0.1',
-        unity_port=5555,
-        save_training_data=SAVE_TRAINING_DATA
+        unity_ip=args.ip,
+        unity_port=args.port,
+        save_training_data=SAVE_TRAINING_DATA,
+        output_filename=args.output,
+        max_frames=args.frames
     )
 
     # Start streaming
-    streamer.stream(show_video=True)
+    streamer.stream(show_video=not args.no_video)

@@ -4,11 +4,11 @@ Trains base model once, then supports user-specific calibration
 
 Usage:
     # Train base model (do this once)
-    python enhanced_trainer.py --dataset data/training_dataset.json --epochs 150
+    python enhanced_trainer.py --dataset data1/training_dataset.json --epochs 50
     
     # Fine-tune for new user (calibration)
     python enhanced_trainer.py --calibrate --base-model models/base_model.pth \\
-                              --user-data data/user_calibration.json --epochs 20
+                              --user-data data1/user_calibration.json --epochs 20
 """
 
 import json
@@ -555,7 +555,7 @@ class EnhancedTrainer:
         # report = classification_report(self.val_true_labels, self.val_pred_labels,
         #                               target_names=self.pose_names, digits=3)
         # print(report)
-        
+
         # Ensure we only use labels actually present in validation set
         unique_labels = sorted(set(self.val_true_labels))
         label_names = [self.pose_names[i] for i in unique_labels]
