@@ -1,0 +1,291 @@
+{
+    "timestamp": 1761687474.4238083,
+    "hand": "left",
+    "wrist": {
+        "position": [
+            0,
+            0,
+            0
+        ],
+        "rotation": [
+            -1.3370360818498739e-08,
+            0.0,
+            0.0,
+            1.0
+        ]
+    },
+    "thumb": {
+        "metacarpal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -2.017044522517608e-07,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "proximal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -2.3391198311628614e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "intermediate": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -2.4481449756308393e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "distal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                1.1831462032318996e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    },
+    "index": {
+        "metacarpal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                8.302142617822028e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "proximal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -1.6801152469270164e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "intermediate": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -5.442560180313194e-09,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "distal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -2.7867626428701442e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    },
+    "middle": {
+        "metacarpal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -3.826960970343407e-09,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "proximal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                1.14715268395571e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "intermediate": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                8.239277349275653e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "distal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                3.901803324879438e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    },
+    "ring": {
+        "metacarpal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                -2.4238257623210302e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "proximal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "intermediate": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                5.13468867424649e-09,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "distal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                1.752915324004789e-08,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    },
+    "pinky": {
+        "metacarpal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "proximal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "intermediate": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        "distal": {
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    }
+}
+UnityEngine.Debug:Log (object)
+UDPNeuraGloveDataReceiver:ReceiveData () (at Assets/Scripts/UDPNeuraGloveDataReceiver.cs:107)
+System.Threading.ThreadHelper:ThreadStart ()
+
