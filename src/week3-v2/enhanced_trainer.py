@@ -4,11 +4,11 @@ Trains base model once, then supports user-specific calibration
 
 Usage:
     # Train base model (do this once)
-    python enhanced_trainer.py --dataset data1/training_dataset.json --epochs 50
+    python enhanced_trainer.py --dataset data/training_dataset.json --epochs 50
     
     # Fine-tune for new user (calibration)
     python enhanced_trainer.py --calibrate --base-model models/base_model.pth \\
-                              --user-data data1/user_calibration.json --epochs 20
+                              --user-data data/user_calibration.json --epochs 20
 """
 
 import json
@@ -42,7 +42,7 @@ class TrainingConfig:
     
     # Input/Output
     INPUT_SIZE: int = 15   # 5 flex + 4 quat + 3 accel + 3 gyro
-    OUTPUT_SIZE: int = 147  # 21 joints × 7 (3 pos + 4 rot)
+    OUTPUT_SIZE: int = 147  # 21 joints Ã— 7 (3 pos + 4 rot)
     
     # Training hyperparameters
     BATCH_SIZE: int = 32
@@ -246,7 +246,7 @@ class EnhancedTrainer:
         self.val_pred_labels = []
     
     def load_dataset(self, dataset_path: str) -> Tuple[DataLoader, DataLoader]:
-        """Load and split dataset into train/val"""
+        """Load and split dataset into train/val - FIXED to prevent data leakage"""
         print(f"\n📂 Loading dataset: {dataset_path}")
         
         with open(dataset_path, 'r') as f:
@@ -263,20 +263,50 @@ class EnhancedTrainer:
                 print(f"    {pose:15s}: {stats['num_datasets']} datasets, "
                       f"{stats['num_samples']} samples")
         
-        # Create dataset
-        full_dataset = HandPoseDataset(
-            samples, 
+        # Group samples by recording session (pose_name, dataset_number)
+        recording_groups = {}
+        for sample in samples:
+            key = (sample['pose_name'], sample.get('dataset_number', 0))
+            if key not in recording_groups:
+                recording_groups[key] = []
+            recording_groups[key].append(sample)
+        
+        print(f"\n  Total recording sessions: {len(recording_groups)}")
+        
+        # Split recording sessions into train/val (NOT individual sequences!)
+        all_keys = list(recording_groups.keys())
+        np.random.seed(42)
+        np.random.shuffle(all_keys)
+        
+        split_idx = int(self.config.TRAIN_SPLIT * len(all_keys))
+        train_keys = set(all_keys[:split_idx])
+        val_keys = set(all_keys[split_idx:])
+        
+        # Separate samples by train/val recording sessions
+        train_samples = []
+        val_samples = []
+        
+        for key in train_keys:
+            train_samples.extend(recording_groups[key])
+        for key in val_keys:
+            val_samples.extend(recording_groups[key])
+        
+        print(f"  Training recording sessions: {len(train_keys)}")
+        print(f"  Validation recording sessions: {len(val_keys)}")
+        print(f"  Training samples: {len(train_samples)}")
+        print(f"  Validation samples: {len(val_samples)}")
+        
+        # Create separate datasets (sequences created within each split)
+        train_dataset = HandPoseDataset(
+            train_samples,
             self.pose_to_idx,
             self.config.SEQUENCE_LENGTH
         )
         
-        # Split train/val
-        train_size = int(self.config.TRAIN_SPLIT * len(full_dataset))
-        val_size = len(full_dataset) - train_size
-        
-        train_dataset, val_dataset = torch.utils.data.random_split(
-            full_dataset, [train_size, val_size],
-            generator=torch.Generator().manual_seed(42)
+        val_dataset = HandPoseDataset(
+            val_samples,
+            self.pose_to_idx,
+            self.config.SEQUENCE_LENGTH
         )
         
         # Create dataloaders
@@ -296,8 +326,8 @@ class EnhancedTrainer:
             pin_memory=True
         )
         
-        print(f"  Training sequences: {len(train_dataset)}")
-        print(f"  Validation sequences: {len(val_dataset)}")
+        print(f"  ✓ Training sequences: {len(train_dataset)} (no data leakage)")
+        print(f"  ✓ Validation sequences: {len(val_dataset)} (from separate recordings)")
         
         return train_loader, val_loader
     
@@ -451,7 +481,7 @@ class EnhancedTrainer:
             
             # Early stopping
             if patience_counter >= max_patience:
-                print(f"\n⚠️  Early stopping at epoch {epoch+1}")
+                print(f"\nâš ï¸  Early stopping at epoch {epoch+1}")
                 break
         
         print()
@@ -465,12 +495,12 @@ class EnhancedTrainer:
     
     def load_base_model(self, model_path: str):
         """Load pretrained base model for calibration"""
-        print(f"\n📥 Loading base model: {model_path}")
+        print(f"\nðŸ“¥ Loading base model: {model_path}")
         
         checkpoint = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         
-        print(f"  ✓ Base model loaded successfully")
+        print(f"  âœ“ Base model loaded successfully")
         print(f"  Original training: {len(checkpoint.get('history', {}).get('val_accuracy', []))} epochs")
     
     def save_model(self, filename: str):
@@ -490,7 +520,7 @@ class EnhancedTrainer:
         }, filepath)
         
         if filename != 'best_model.pth':
-            print(f"  💾 Model saved: {filepath}")
+            print(f"  ðŸ’¾ Model saved: {filepath}")
     
     def plot_training_history(self, save_path: str = 'training_history.png'):
         """Plot training curves"""
@@ -531,7 +561,7 @@ class EnhancedTrainer:
         
         plt.tight_layout()
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"  📊 Training history: {save_path}")
+        print(f"  ðŸ“Š Training history: {save_path}")
     
     def plot_confusion_matrix(self, save_path: str = 'confusion_matrix.png'):
         """Plot confusion matrix"""
@@ -547,15 +577,15 @@ class EnhancedTrainer:
         plt.xlabel('Predicted Pose', fontsize=12)
         plt.tight_layout()
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"  📊 Confusion matrix: {save_path}")
+        print(f"  ðŸ“Š Confusion matrix: {save_path}")
         
         # Print classification report
-        print("\n📋 Classification Report:")
+        print("\nðŸ“‹ Classification Report:")
         print("="*70)
         # report = classification_report(self.val_true_labels, self.val_pred_labels,
         #                               target_names=self.pose_names, digits=3)
         # print(report)
-
+        
         # Ensure we only use labels actually present in validation set
         unique_labels = sorted(set(self.val_true_labels))
         label_names = [self.pose_names[i] for i in unique_labels]
@@ -625,7 +655,7 @@ def main():
     # Load base model if calibration mode
     if args.calibrate:
         if not args.base_model:
-            print("✗ Error: --base-model required for calibration mode")
+            print("âœ— Error: --base-model required for calibration mode")
             return
         trainer.load_base_model(args.base_model)
     
@@ -643,7 +673,7 @@ def main():
     trainer.plot_confusion_matrix()
     
     print("\n" + "="*70)
-    print("✅ SUCCESS!")
+    print("âœ… SUCCESS!")
     print("="*70)
     print(f"  Final model: models/{args.output}")
     print(f"  Best model: models/best_model.pth")
@@ -651,7 +681,7 @@ def main():
     print(f"  Confusion matrix: confusion_matrix.png")
     
     if not args.calibrate:
-        print(f"\n📋 Next steps:")
+        print(f"\nðŸ“‹ Next steps:")
         print(f"   1. Test inference:")
         print(f"      python inference_engine.py --model models/best_model.pth")
         print(f"   2. For new users, collect calibration data and run:")
@@ -659,7 +689,7 @@ def main():
         print(f"             --base-model models/best_model.pth \\")
         print(f"             --dataset data/user_calibration.json --epochs 20")
     else:
-        print(f"\n📋 Next step:")
+        print(f"\nðŸ“‹ Next step:")
         print(f"   Run inference with calibrated model:")
         print(f"   python inference_engine.py --model models/{args.output}")
     
