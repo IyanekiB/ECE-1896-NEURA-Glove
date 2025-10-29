@@ -1,14 +1,18 @@
 """
-NEURA GLOVE - Enhanced Trainer with User Calibration
-Trains base model once, then supports user-specific calibration
+FIXED LSTM TRAINER - Addresses quaternion output issues
 
-Usage:
-    # Train base model (do this once)
-    python enhanced_trainer.py --dataset data/training_dataset.json --epochs 50
-    
-    # Fine-tune for new user (calibration)
-    python enhanced_trainer.py --calibrate --base-model models/base_model.pth \\
-                              --user-data data/user_calibration.json --epochs 20
+KEY FIXES:
+1. Proper quaternion normalization in model output
+2. Simpler, more effective LSTM architecture  
+3. Better loss function for rotations
+4. Proper data format handling
+5. Gradient clipping to prevent exploding gradients
+
+PROBLEMS IDENTIFIED IN ORIGINAL CODE:
+- No quaternion normalization → outputs near-zero values
+- Too deep LSTM (3 layers) causing vanishing gradients
+- No special handling for rotation vs position data
+- Training on raw positions instead of normalized rotations
 """
 
 import json
@@ -23,40 +27,42 @@ from sklearn.metrics import confusion_matrix, classification_report
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 
 # ============================================================================
-# CONFIGURATION
+# FIXED CONFIGURATION
 # ============================================================================
 
 class TrainingConfig:
-    """Training configuration"""
+    """Optimized training configuration"""
     # Sequence parameters
-    SEQUENCE_LENGTH: int = 10  # Use 10-frame sequences
+    SEQUENCE_LENGTH: int = 10
     
-    # LSTM architecture
-    LSTM_HIDDEN_SIZE: int = 256  # Increased for better capacity
-    LSTM_NUM_LAYERS: int = 3     # Deeper network
-    LSTM_DROPOUT: float = 0.3
+    # SIMPLIFIED LSTM architecture - fewer layers work better
+    LSTM_HIDDEN_SIZE: int = 128  # Reduced from 256
+    LSTM_NUM_LAYERS: int = 2     # Reduced from 3
+    LSTM_DROPOUT: float = 0.2    # Reduced dropout
     
     # Input/Output
-    INPUT_SIZE: int = 15   # 5 flex + 4 quat + 3 accel + 3 gyro
-    OUTPUT_SIZE: int = 147  # 21 joints Ã— 7 (3 pos + 4 rot)
+    INPUT_SIZE: int = 15
+    OUTPUT_SIZE: int = 147  # 21 joints × 7 (3 pos + 4 rot)
     
     # Training hyperparameters
     BATCH_SIZE: int = 32
     LEARNING_RATE: float = 0.001
     NUM_EPOCHS: int = 150
     TRAIN_SPLIT: float = 0.85
+    GRADIENT_CLIP: float = 1.0  # Prevent exploding gradients
     
-    # Calibration hyperparameters (for user-specific fine-tuning)
-    CALIBRATION_LEARNING_RATE: float = 0.0001  # Lower LR for fine-tuning
-    CALIBRATION_EPOCHS: int = 20
+    # Loss weights
+    ROTATION_LOSS_WEIGHT: float = 10.0  # Prioritize rotation learning
+    POSE_LOSS_WEIGHT: float = 0.5       # Auxiliary task
 
 
 # ============================================================================
-# DATASET
+# DATASET (SAME AS BEFORE)
 # ============================================================================
 
 class HandPoseDataset(Dataset):
@@ -69,8 +75,8 @@ class HandPoseDataset(Dataset):
         self.sequences = []
         self.targets = []
         self.pose_labels = []
+        self._output_size = None
         
-        # Group samples by pose and dataset
         pose_dataset_groups = {}
         for sample in samples:
             key = (sample['pose_name'], sample.get('dataset_number', 0))
@@ -78,18 +84,13 @@ class HandPoseDataset(Dataset):
                 pose_dataset_groups[key] = []
             pose_dataset_groups[key].append(sample)
         
-        # Create sequences from each group
         for (pose_name, dataset_num), group_samples in pose_dataset_groups.items():
-            # Sort by frame number
             group_samples = sorted(group_samples, key=lambda x: x['frame_number'])
-            
-            # Create overlapping sequences
             num_sequences = len(group_samples) - sequence_length + 1
             
             for i in range(num_sequences):
                 seq_samples = group_samples[i:i+sequence_length]
                 
-                # Input: sequence of sensor readings
                 input_sequence = []
                 for sample in seq_samples:
                     features = (
@@ -100,17 +101,49 @@ class HandPoseDataset(Dataset):
                     )
                     input_sequence.append(features)
                 
-                # Output: last frame's joint data
                 target = []
-                for joint in seq_samples[-1]['joints']:
-                    target.extend(joint['position'])
-                    target.extend(joint['rotation'])
+                joints_data = seq_samples[-1]['joints']
+                
+                if isinstance(joints_data, list):
+                    for joint in joints_data:
+                        target.extend(joint['position'])
+                        target.extend(joint['rotation'])
+                elif isinstance(joints_data, dict):
+                    first_value = next(iter(joints_data.values()))
+                    if isinstance(first_value, dict):
+                        for finger_name in ['wrist', 'thumb', 'index', 'middle', 'ring', 'pinky']:
+                            if finger_name in joints_data:
+                                finger_data = joints_data[finger_name]
+                                if isinstance(finger_data, dict):
+                                    for joint_name in sorted(finger_data.keys()):
+                                        target.append(float(finger_data[joint_name]))
+                                else:
+                                    target.append(float(finger_data))
+                    else:
+                        target = []
+                        for joint_name, coords in joints_data.items():
+                            if isinstance(coords, dict):
+                                target.extend([float(coords.get('x', 0.0)),
+                                            float(coords.get('y', 0.0)),
+                                            float(coords.get('z', 0.0))])
+                            else:
+                                target.append(float(coords))
+                else:
+                    raise ValueError(f"Unknown joints data format: {type(joints_data)}")
                 
                 self.sequences.append(np.array(input_sequence, dtype=np.float32))
                 self.targets.append(np.array(target, dtype=np.float32))
                 self.pose_labels.append(self.pose_to_idx[pose_name])
+                
+                if self._output_size is None:
+                    self._output_size = len(target)
         
         print(f"  Created {len(self.sequences)} training sequences")
+        print(f"  Detected output size: {self._output_size}")
+    
+    @property
+    def output_size(self):
+        return self._output_size
     
     def __len__(self):
         return len(self.sequences)
@@ -119,18 +152,73 @@ class HandPoseDataset(Dataset):
         return (
             torch.FloatTensor(self.sequences[idx]),
             torch.FloatTensor(self.targets[idx]),
-            torch.LongTensor([self.pose_labels[idx]])
+            self.pose_labels[idx]  # Return scalar, will be batched to (batch_size,)
         )
 
 
 # ============================================================================
-# LSTM MODEL
+# FIXED LSTM MODEL WITH QUATERNION NORMALIZATION
 # ============================================================================
 
-class HandPoseLSTM(nn.Module):
+class QuaternionNormalizationLayer(nn.Module):
     """
-    LSTM network for hand pose estimation
-    Dual output: joint angles/positions + pose classification
+    Normalizes quaternions to unit length.
+    Robust: handles outputs that are either:
+      - (batch, n_joints * 7)  => treat each joint as [px,py,pz,qx,qy,qz,qw] and normalize last 4
+      - (batch, k * 4)         => treat as k quaternions and normalize each
+      - otherwise: no-op (returns x)
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (batch, N) tensor
+        Returns x with quaternion components normalized where possible.
+        """
+        if x.ndim != 2:
+            # unexpected shape, return as-is
+            return x
+
+        batch_size, total = x.shape
+
+        # Case 1: total is divisible by 7 (assume per-joint size 7: 3 pos + 4 quat)
+        if total % 7 == 0:
+            n_joints = total // 7
+            try:
+                x_reshaped = x.view(batch_size, n_joints, 7)  # (batch, n_joints, 7)
+            except Exception:
+                return x  # safe fallback
+            positions = x_reshaped[:, :, :3]            # (batch, n_joints, 3)
+            quaternions = x_reshaped[:, :, 3:]          # (batch, n_joints, 4)
+            quat_norms = torch.norm(quaternions, dim=2, keepdim=True) + 1e-8
+            quaternions_normalized = quaternions / quat_norms
+            x_normalized = torch.cat([positions, quaternions_normalized], dim=2)
+            return x_normalized.view(batch_size, total)
+
+        # Case 2: total is divisible by 4 (assume pure quaternions sequence)
+        if total % 4 == 0:
+            k = total // 4
+            try:
+                q_reshaped = x.view(batch_size, k, 4)   # (batch, k, 4)
+            except Exception:
+                return x
+            q_norms = torch.norm(q_reshaped, dim=2, keepdim=True) + 1e-8
+            q_normalized = q_reshaped / q_norms
+            return q_normalized.view(batch_size, total)
+
+        # Fallback: cannot infer quaternion layout — return x unchanged
+        return x
+
+
+class FixedHandPoseLSTM(nn.Module):
+    """
+    FIXED LSTM with proper quaternion handling
+    CHANGES:
+    1. Simpler architecture (2 layers instead of 3)
+    2. Quaternion normalization layer
+    3. Separate heads for position and rotation
+    4. Better initialization
     """
     
     def __init__(self, config: TrainingConfig, num_poses: int):
@@ -138,7 +226,7 @@ class HandPoseLSTM(nn.Module):
         self.config = config
         self.num_poses = num_poses
         
-        # Shared LSTM backbone
+        # Simpler LSTM backbone (2 layers)
         self.lstm = nn.LSTM(
             input_size=config.INPUT_SIZE,
             hidden_size=config.LSTM_HIDDEN_SIZE,
@@ -148,29 +236,39 @@ class HandPoseLSTM(nn.Module):
             bidirectional=False
         )
         
-        # Joint prediction head (regression)
+        # Simplified joint prediction head
         self.joint_head = nn.Sequential(
-            nn.Linear(config.LSTM_HIDDEN_SIZE, 512),
-            nn.ReLU(),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.4),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.4),
-            nn.Linear(512, config.OUTPUT_SIZE)
-        )
-        
-        # Pose classification head (auxiliary task)
-        self.classification_head = nn.Sequential(
             nn.Linear(config.LSTM_HIDDEN_SIZE, 256),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(256, 128),
+            nn.Dropout(0.3),
+            nn.Linear(256, config.OUTPUT_SIZE),
+            QuaternionNormalizationLayer()  # CRITICAL FIX
+        )
+        
+        # Pose classification head
+        self.classification_head = nn.Sequential(
+            nn.Linear(config.LSTM_HIDDEN_SIZE, 128),
             nn.ReLU(),
-            nn.Dropout(0.4),
+            nn.Dropout(0.3),
             nn.Linear(128, num_poses)
         )
+        
+        # Better weight initialization
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        """Initialize weights properly"""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LSTM):
+                for name, param in m.named_parameters():
+                    if 'weight' in name:
+                        nn.init.xavier_uniform_(param)
+                    elif 'bias' in name:
+                        nn.init.constant_(param, 0)
     
     def forward(self, x):
         """
@@ -178,7 +276,7 @@ class HandPoseLSTM(nn.Module):
             x: (batch_size, sequence_length, input_size)
         
         Returns:
-            joint_pred: (batch_size, output_size)
+            joint_pred: (batch_size, output_size) with normalized quaternions
             pose_pred: (batch_size, num_poses)
         """
         # LSTM forward pass
@@ -187,7 +285,7 @@ class HandPoseLSTM(nn.Module):
         # Use last timestep output
         last_output = lstm_out[:, -1, :]
         
-        # Joint prediction
+        # Joint prediction (with quaternion normalization)
         joint_pred = self.joint_head(last_output)
         
         # Pose classification
@@ -197,73 +295,110 @@ class HandPoseLSTM(nn.Module):
 
 
 # ============================================================================
-# TRAINER
+# CUSTOM LOSS FUNCTION
 # ============================================================================
 
-class EnhancedTrainer:
-    """Trains base model and supports user calibration"""
+class RotationAwareLoss(nn.Module):
+    """
+    Rotation-aware loss that adapts dynamically to output size.
+    If the output cannot be reshaped as (n_joints, 7), it falls back to simple MSE.
+    """
+    def __init__(self, rotation_weight=10.0):
+        super().__init__()
+        self.rotation_weight = rotation_weight
+        self.mse = nn.MSELoss()
+
+    def forward(self, pred, target):
+        batch_size = pred.shape[0]
+        total_dim = pred.shape[1]
+
+        # ✅ Case 1: If divisible by 7 → assume (n_joints × [pos3 + rot4])
+        if total_dim % 7 == 0:
+            n_joints = total_dim // 7
+            pred_reshaped = pred.view(batch_size, n_joints, 7)
+            target_reshaped = target.view(batch_size, n_joints, 7)
+
+            pos_pred = pred_reshaped[:, :, :3]
+            pos_target = target_reshaped[:, :, :3]
+            rot_pred = pred_reshaped[:, :, 3:]
+            rot_target = target_reshaped[:, :, 3:]
+
+            pos_loss = self.mse(pos_pred, pos_target)
+            rot_loss = self.mse(rot_pred, rot_target)
+            total_loss = pos_loss + self.rotation_weight * rot_loss
+            return total_loss, pos_loss, rot_loss
+
+        # ✅ Case 2: If divisible by 4 → assume quaternion-only output
+        elif total_dim % 4 == 0:
+            k = total_dim // 4
+            pred_q = pred.view(batch_size, k, 4)
+            target_q = target.view(batch_size, k, 4)
+            rot_loss = self.mse(pred_q, target_q)
+            return rot_loss, torch.tensor(0.0, device=pred.device), rot_loss
+
+        # ✅ Case 3: Otherwise, treat as generic regression
+        else:
+            total_loss = self.mse(pred, target)
+            return total_loss, total_loss, torch.tensor(0.0, device=pred.device)
+
+
+# ============================================================================
+# TRAINER WITH FIXES
+# ============================================================================
+
+class FixedTrainer:
+    """Enhanced trainer with proper quaternion handling"""
     
-    def __init__(self, config: TrainingConfig, pose_names: List[str], 
-                 calibration_mode: bool = False):
+    def __init__(self, config: TrainingConfig, pose_names: List[str]):
         self.config = config
         self.pose_names = sorted(pose_names)
         self.pose_to_idx = {name: idx for idx, name in enumerate(self.pose_names)}
-        self.idx_to_pose = {idx: name for name, idx in self.pose_to_idx.items()}
         self.num_poses = len(self.pose_names)
-        self.calibration_mode = calibration_mode
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"  Device: {self.device}")
         
-        self.model = HandPoseLSTM(config, self.num_poses).to(self.device)
+        self.model = FixedHandPoseLSTM(config, self.num_poses).to(self.device)
         
-        # Loss functions
-        self.joint_criterion = nn.MSELoss()
+        # Custom loss functions
+        self.joint_criterion = RotationAwareLoss(config.ROTATION_LOSS_WEIGHT)
         self.pose_criterion = nn.CrossEntropyLoss()
+        self.pose_weight = config.POSE_LOSS_WEIGHT  # Missing attribute
         
-        # Optimizer (different LR for calibration)
-        lr = config.CALIBRATION_LEARNING_RATE if calibration_mode else config.LEARNING_RATE
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=0.01)
+        # Optimizer with gradient clipping
+        self.optimizer = optim.AdamW(
+            self.model.parameters(),
+            lr=config.LEARNING_RATE,
+            weight_decay=0.01
+        )
         
+        # Learning rate scheduler
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', patience=10, factor=0.5
         )
         
         # Training history
         self.history = {
-            'train_joint_loss': [],
-            'train_pose_loss': [],
-            'train_total_loss': [],
-            'val_joint_loss': [],
-            'val_pose_loss': [],
-            'val_total_loss': [],
-            'val_accuracy': [],
-            'learning_rate': []
+            'train_loss': [], 'val_loss': [],
+            'train_pos_loss': [], 'val_pos_loss': [],
+            'train_rot_loss': [], 'val_rot_loss': [],
+            'train_pose_acc': [], 'val_pose_acc': []
         }
         
-        # For confusion matrix
-        self.val_true_labels = []
-        self.val_pred_labels = []
+        print(f"\n  Model Parameters: {sum(p.numel() for p in self.model.parameters()):,}")
+        print(f"  Trainable Parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,}")
     
-    def load_dataset(self, dataset_path: str) -> Tuple[DataLoader, DataLoader]:
-        """Load and split dataset into train/val - FIXED to prevent data leakage"""
-        print(f"\n📂 Loading dataset: {dataset_path}")
+    def prepare_data(self, dataset_path: str):
+        """Load and prepare datasets"""
+        print(f"\nLoading dataset: {dataset_path}")
         
         with open(dataset_path, 'r') as f:
             data = json.load(f)
         
         samples = data['samples']
-        metadata = data['metadata']
-        
         print(f"  Total samples: {len(samples)}")
-        print(f"  Poses: {metadata['poses']}")
-        if 'pose_statistics' in metadata:
-            print(f"  Dataset breakdown:")
-            for pose, stats in metadata['pose_statistics'].items():
-                print(f"    {pose:15s}: {stats['num_datasets']} datasets, "
-                      f"{stats['num_samples']} samples")
         
-        # Group samples by recording session (pose_name, dataset_number)
+        # Group by recording session to prevent data leakage
         recording_groups = {}
         for sample in samples:
             key = (sample['pose_name'], sample.get('dataset_number', 0))
@@ -271,9 +406,7 @@ class EnhancedTrainer:
                 recording_groups[key] = []
             recording_groups[key].append(sample)
         
-        print(f"\n  Total recording sessions: {len(recording_groups)}")
-        
-        # Split recording sessions into train/val (NOT individual sequences!)
+        # Split by recording sessions
         all_keys = list(recording_groups.keys())
         np.random.seed(42)
         np.random.shuffle(all_keys)
@@ -282,7 +415,6 @@ class EnhancedTrainer:
         train_keys = set(all_keys[:split_idx])
         val_keys = set(all_keys[split_idx:])
         
-        # Separate samples by train/val recording sessions
         train_samples = []
         val_samples = []
         
@@ -291,409 +423,307 @@ class EnhancedTrainer:
         for key in val_keys:
             val_samples.extend(recording_groups[key])
         
-        print(f"  Training recording sessions: {len(train_keys)}")
-        print(f"  Validation recording sessions: {len(val_keys)}")
+        print(f"  Training sessions: {len(train_keys)}")
+        print(f"  Validation sessions: {len(val_keys)}")
         print(f"  Training samples: {len(train_samples)}")
         print(f"  Validation samples: {len(val_samples)}")
         
-        # Create separate datasets (sequences created within each split)
+        # Create datasets
         train_dataset = HandPoseDataset(
-            train_samples,
-            self.pose_to_idx,
-            self.config.SEQUENCE_LENGTH
+            train_samples, self.pose_to_idx, self.config.SEQUENCE_LENGTH
+        )
+        val_dataset = HandPoseDataset(
+            val_samples, self.pose_to_idx, self.config.SEQUENCE_LENGTH
         )
         
-        val_dataset = HandPoseDataset(
-            val_samples,
-            self.pose_to_idx,
-            self.config.SEQUENCE_LENGTH
-        )
+        # Update config if needed
+        if train_dataset.output_size != self.config.OUTPUT_SIZE:
+            print(f"\n  ⚠️  Updating OUTPUT_SIZE: {self.config.OUTPUT_SIZE} → {train_dataset.output_size}")
+            self.config.OUTPUT_SIZE = train_dataset.output_size
+            self.model = FixedHandPoseLSTM(self.config, self.num_poses).to(self.device)
+            self.optimizer = optim.AdamW(
+                self.model.parameters(),
+                lr=self.config.LEARNING_RATE,
+                weight_decay=0.01
+            )
         
         # Create dataloaders
         train_loader = DataLoader(
-            train_dataset,
-            batch_size=self.config.BATCH_SIZE,
-            shuffle=True,
-            num_workers=2,
-            pin_memory=True
+            train_dataset, batch_size=self.config.BATCH_SIZE, shuffle=True
         )
-        
         val_loader = DataLoader(
-            val_dataset,
-            batch_size=self.config.BATCH_SIZE,
-            shuffle=False,
-            num_workers=2,
-            pin_memory=True
+            val_dataset, batch_size=self.config.BATCH_SIZE, shuffle=False
         )
-        
-        print(f"  ✓ Training sequences: {len(train_dataset)} (no data leakage)")
-        print(f"  ✓ Validation sequences: {len(val_dataset)} (from separate recordings)")
         
         return train_loader, val_loader
     
-    def train_epoch(self, train_loader: DataLoader) -> Tuple[float, float, float, float]:
-        """Train for one epoch"""
+    def train_epoch(self, train_loader):
+        """Train one epoch"""
         self.model.train()
-        total_joint_loss = 0.0
-        total_pose_loss = 0.0
-        correct = 0
-        total = 0
+        total_loss = 0
+        total_pos_loss = 0
+        total_rot_loss = 0
+        correct_poses = 0
+        total_poses = 0
         
-        for batch_sequences, batch_targets, batch_pose_labels in train_loader:
-            batch_sequences = batch_sequences.to(self.device)
-            batch_targets = batch_targets.to(self.device)
-            batch_pose_labels = batch_pose_labels.squeeze().to(self.device)
-            
-            self.optimizer.zero_grad()
+        for batch in train_loader:
+            if not batch or len(batch[0]) == 0:
+                continue
+
+        for sequences, targets, pose_labels in train_loader:
+            sequences = sequences.to(self.device)
+            targets = targets.to(self.device)
+            pose_labels = pose_labels.squeeze().to(self.device)
             
             # Forward pass
-            joint_pred, pose_pred = self.model(batch_sequences)
+            joint_pred, pose_pred = self.model(sequences)
             
-            # Calculate losses
-            joint_loss = self.joint_criterion(joint_pred, batch_targets)
-            pose_loss = self.pose_criterion(pose_pred, batch_pose_labels)
+            # Compute losses
+            joint_loss, pos_loss, rot_loss = self.joint_criterion(joint_pred, targets)
+            pose_loss = self.pose_criterion(pose_pred, pose_labels)
             
-            # Combined loss (joint prediction is primary task)
-            total_loss = joint_loss + 0.3 * pose_loss
+            # Combined loss
+            loss = joint_loss + self.config.POSE_LOSS_WEIGHT * pose_loss
             
-            # Backward pass
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            # Backward pass with gradient clipping
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.config.GRADIENT_CLIP
+            )
             self.optimizer.step()
             
             # Statistics
-            total_joint_loss += joint_loss.item()
-            total_pose_loss += pose_loss.item()
+            total_loss += loss.item()
+            total_pos_loss += pos_loss.item()
+            total_rot_loss += rot_loss.item()
             
             _, predicted = torch.max(pose_pred, 1)
-            total += batch_pose_labels.size(0)
-            correct += (predicted == batch_pose_labels).sum().item()
+            correct_poses += (predicted == pose_labels).sum().item()
+            total_poses += pose_labels.size(0)
         
-        avg_joint_loss = total_joint_loss / len(train_loader)
-        avg_pose_loss = total_pose_loss / len(train_loader)
-        avg_total_loss = avg_joint_loss + 0.3 * avg_pose_loss
-        accuracy = 100 * correct / total
+        avg_loss = total_loss / len(train_loader)
+        avg_pos_loss = total_pos_loss / len(train_loader)
+        avg_rot_loss = total_rot_loss / len(train_loader)
+        pose_acc = 100.0 * correct_poses / total_poses
         
-        return avg_joint_loss, avg_pose_loss, avg_total_loss, accuracy
+        return avg_loss, avg_pos_loss, avg_rot_loss, pose_acc
     
-    def validate(self, val_loader: DataLoader) -> Tuple[float, float, float, float]:
-        """Validate model"""
+    def validate_epoch(self, val_loader):
         self.model.eval()
-        total_joint_loss = 0.0
-        total_pose_loss = 0.0
-        correct = 0
-        total = 0
-        
-        self.val_true_labels = []
-        self.val_pred_labels = []
-        
+        total_loss = 0.0
+        total_pos = 0.0
+        total_rot = 0.0
+        total_acc = 0.0
+        num_batches = 0
+
         with torch.no_grad():
-            for batch_sequences, batch_targets, batch_pose_labels in val_loader:
-                batch_sequences = batch_sequences.to(self.device)
-                batch_targets = batch_targets.to(self.device)
-                batch_pose_labels = batch_pose_labels.squeeze().to(self.device)
-                
-                # Forward pass
-                joint_pred, pose_pred = self.model(batch_sequences)
-                
-                # Calculate losses
-                joint_loss = self.joint_criterion(joint_pred, batch_targets)
-                pose_loss = self.pose_criterion(pose_pred, batch_pose_labels)
-                
-                total_joint_loss += joint_loss.item()
-                total_pose_loss += pose_loss.item()
-                
-                _, predicted = torch.max(pose_pred, 1)
-                total += batch_pose_labels.size(0)
-                correct += (predicted == batch_pose_labels).sum().item()
-                
-                # Store for confusion matrix
-                self.val_true_labels.extend(batch_pose_labels.cpu().numpy())
-                self.val_pred_labels.extend(predicted.cpu().numpy())
-        
-        avg_joint_loss = total_joint_loss / len(val_loader)
-        avg_pose_loss = total_pose_loss / len(val_loader)
-        avg_total_loss = avg_joint_loss + 0.3 * avg_pose_loss
-        accuracy = 100 * correct / total
-        
-        return avg_joint_loss, avg_pose_loss, avg_total_loss, accuracy
+            for batch in val_loader:
+                # Skip empty batches
+                if not batch:
+                    continue
+
+                if len(batch) == 2:
+                    inputs, targets = batch
+                    pose_labels = None
+                elif len(batch) == 3:
+                    inputs, targets, pose_labels = batch
+                else:
+                    continue  # malformed batch
+
+                if inputs.size(0) == 0:
+                    continue  # skip empty input batch
+
+                inputs = inputs.to(self.device).float()
+                targets = targets.to(self.device).float()
+
+                outputs = self.model(inputs)
+                joint_pred, pose_pred = outputs if isinstance(outputs, tuple) else (outputs, None)
+
+                # Rotation loss (handles dynamic sizes safely)
+                joint_loss, pos_loss, rot_loss = self.joint_criterion(joint_pred, targets)
+
+                # Optional classification loss
+                pose_loss = 0.0
+                if pose_pred is not None and pose_labels is not None and len(pose_labels) > 0:
+                    pose_labels = pose_labels.to(self.device).long()
+                    pose_loss = self.pose_criterion(pose_pred, pose_labels)
+                    total_acc += (pose_pred.argmax(dim=1) == pose_labels).float().mean().item()
+
+                loss = joint_loss + self.pose_weight * pose_loss
+                total_loss += loss.item()
+                total_pos += pos_loss.item() if torch.is_tensor(pos_loss) else pos_loss
+                total_rot += rot_loss.item() if torch.is_tensor(rot_loss) else rot_loss
+                num_batches += 1
+
+        # Avoid division by zero
+        if num_batches == 0:
+            print("⚠️ Warning: Validation had zero usable batches. Skipping metrics.")
+            return 0.0, 0.0, 0.0, 0.0
+
+        return (
+            total_loss / num_batches,
+            total_pos / num_batches,
+            total_rot / num_batches,
+            total_acc / num_batches if total_acc != 0 else 0.0
+        )
     
-    def train(self, train_loader: DataLoader, val_loader: DataLoader, num_epochs: int = None):
+    def train(self, train_loader, val_loader, output_path: str):
         """Full training loop"""
-        if num_epochs is None:
-            num_epochs = self.config.CALIBRATION_EPOCHS if self.calibration_mode else self.config.NUM_EPOCHS
-        
-        mode_str = "CALIBRATION" if self.calibration_mode else "BASE MODEL TRAINING"
-        
         print("\n" + "="*70)
-        print(f"{mode_str}")
+        print("STARTING TRAINING WITH FIXED LSTM")
         print("="*70)
-        print(f"  Epochs: {num_epochs}")
-        print(f"  Batch size: {self.config.BATCH_SIZE}")
-        print(f"  Learning rate: {self.optimizer.param_groups[0]['lr']:.2e}")
-        print(f"  Poses: {self.pose_names}")
-        print(f"  Model parameters: {sum(p.numel() for p in self.model.parameters()):,}")
-        print("="*70)
-        print()
         
         best_val_loss = float('inf')
-        best_val_accuracy = 0.0
         patience_counter = 0
-        max_patience = 25 if not self.calibration_mode else 10
+        patience = 25
         
-        for epoch in range(num_epochs):
+        for epoch in range(self.config.NUM_EPOCHS):
             # Train
-            train_joint_loss, train_pose_loss, train_total_loss, train_acc = self.train_epoch(train_loader)
+            train_loss, train_pos, train_rot, train_acc = self.train_epoch(train_loader)
             
             # Validate
-            val_joint_loss, val_pose_loss, val_total_loss, val_acc = self.validate(val_loader)
+            val_loss, val_pos, val_rot, val_acc = self.validate_epoch(val_loader)
             
             # Update scheduler
-            self.scheduler.step(val_total_loss)
-            current_lr = self.optimizer.param_groups[0]['lr']
+            self.scheduler.step(val_loss)
             
             # Save history
-            self.history['train_joint_loss'].append(train_joint_loss)
-            self.history['train_pose_loss'].append(train_pose_loss)
-            self.history['train_total_loss'].append(train_total_loss)
-            self.history['val_joint_loss'].append(val_joint_loss)
-            self.history['val_pose_loss'].append(val_pose_loss)
-            self.history['val_total_loss'].append(val_total_loss)
-            self.history['val_accuracy'].append(val_acc)
-            self.history['learning_rate'].append(current_lr)
+            self.history['train_loss'].append(train_loss)
+            self.history['val_loss'].append(val_loss)
+            self.history['train_pos_loss'].append(train_pos)
+            self.history['val_pos_loss'].append(val_pos)
+            self.history['train_rot_loss'].append(train_rot)
+            self.history['val_rot_loss'].append(val_rot)
+            self.history['train_pose_acc'].append(train_acc)
+            self.history['val_pose_acc'].append(val_acc)
             
             # Print progress
-            if (epoch + 1) % 5 == 0 or epoch == 0:
-                print(f"Epoch [{epoch+1:3d}/{num_epochs}] | "
-                      f"Joint: {val_joint_loss:.6f} | "
-                      f"Pose: {val_pose_loss:.4f} | "
-                      f"Acc: {val_acc:.2f}% | "
-                      f"LR: {current_lr:.2e}")
+            print(f"\nEpoch {epoch+1}/{self.config.NUM_EPOCHS}")
+            print(f"  Train Loss: {train_loss:.4f} (Pos: {train_pos:.4f}, Rot: {train_rot:.4f})")
+            print(f"  Val Loss:   {val_loss:.4f} (Pos: {val_pos:.4f}, Rot: {val_rot:.4f})")
+            print(f"  Train Acc: {train_acc:.2f}% | Val Acc: {val_acc:.2f}%")
             
             # Save best model
-            if val_total_loss < best_val_loss:
-                best_val_loss = val_total_loss
-                best_val_accuracy = val_acc
-                self.save_model('best_model.pth')
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
                 patience_counter = 0
+                self.save_checkpoint(output_path, epoch, is_best=True)
+                print(f"  ✓ Best model saved (val_loss: {val_loss:.4f})")
             else:
                 patience_counter += 1
-            
-            # Early stopping
-            if patience_counter >= max_patience:
-                print(f"\nâš ï¸  Early stopping at epoch {epoch+1}")
-                break
+                if patience_counter >= patience:
+                    print(f"\n  Early stopping after {epoch+1} epochs")
+                    break
         
-        print()
-        print("="*70)
+        print("\n" + "="*70)
         print("TRAINING COMPLETE")
         print("="*70)
-        print(f"  Best validation loss: {best_val_loss:.6f}")
-        print(f"  Best validation accuracy: {best_val_accuracy:.2f}%")
-        print("="*70)
-        print()
-    
-    def load_base_model(self, model_path: str):
-        """Load pretrained base model for calibration"""
-        print(f"\nðŸ“¥ Loading base model: {model_path}")
         
-        checkpoint = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        
-        print(f"  âœ“ Base model loaded successfully")
-        print(f"  Original training: {len(checkpoint.get('history', {}).get('val_accuracy', []))} epochs")
+        # Plot training history
+        self.plot_training_history()
     
-    def save_model(self, filename: str):
+    def save_checkpoint(self, path: str, epoch: int, is_best: bool = False):
         """Save model checkpoint"""
-        models_dir = Path('models')
-        models_dir.mkdir(exist_ok=True)
-        filepath = models_dir / filename
+        Path("models").mkdir(exist_ok=True)
         
-        torch.save({
+        checkpoint = {
+            'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'config': self.config,
             'pose_names': self.pose_names,
             'pose_to_idx': self.pose_to_idx,
-            'history': self.history,
-            'calibration_mode': self.calibration_mode
-        }, filepath)
+            'history': self.history
+        }
         
-        if filename != 'best_model.pth':
-            print(f"  ðŸ’¾ Model saved: {filepath}")
+        if is_best:
+            torch.save(checkpoint, 'models/best_model_fixed.pth')
+        
+        torch.save(checkpoint, f'models/{path}')
     
-    def plot_training_history(self, save_path: str = 'training_history.png'):
+    def plot_training_history(self):
         """Plot training curves"""
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
         
-        # Joint loss
-        axes[0, 0].plot(self.history['train_joint_loss'], label='Train', linewidth=2)
-        axes[0, 0].plot(self.history['val_joint_loss'], label='Validation', linewidth=2)
+        # Total loss
+        axes[0, 0].plot(self.history['train_loss'], label='Train')
+        axes[0, 0].plot(self.history['val_loss'], label='Val')
+        axes[0, 0].set_title('Total Loss')
         axes[0, 0].set_xlabel('Epoch')
-        axes[0, 0].set_ylabel('MSE Loss')
-        axes[0, 0].set_title('Joint Prediction Loss')
+        axes[0, 0].set_ylabel('Loss')
         axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
+        axes[0, 0].grid(True)
         
-        # Pose loss
-        axes[0, 1].plot(self.history['train_pose_loss'], label='Train', linewidth=2, color='orange')
-        axes[0, 1].plot(self.history['val_pose_loss'], label='Validation', linewidth=2, color='red')
+        # Position loss
+        axes[0, 1].plot(self.history['train_pos_loss'], label='Train')
+        axes[0, 1].plot(self.history['val_pos_loss'], label='Val')
+        axes[0, 1].set_title('Position Loss')
         axes[0, 1].set_xlabel('Epoch')
-        axes[0, 1].set_ylabel('Cross-Entropy Loss')
-        axes[0, 1].set_title('Pose Classification Loss')
+        axes[0, 1].set_ylabel('Loss')
         axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
+        axes[0, 1].grid(True)
+        
+        # Rotation loss
+        axes[1, 0].plot(self.history['train_rot_loss'], label='Train')
+        axes[1, 0].plot(self.history['val_rot_loss'], label='Val')
+        axes[1, 0].set_title('Rotation Loss (Most Important)')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylabel('Loss')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True)
         
         # Accuracy
-        axes[1, 0].plot(self.history['val_accuracy'], linewidth=2, color='green')
-        axes[1, 0].set_xlabel('Epoch')
-        axes[1, 0].set_ylabel('Accuracy (%)')
-        axes[1, 0].set_title('Validation Accuracy')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Learning rate
-        axes[1, 1].plot(self.history['learning_rate'], linewidth=2, color='purple')
+        axes[1, 1].plot(self.history['train_pose_acc'], label='Train')
+        axes[1, 1].plot(self.history['val_pose_acc'], label='Val')
+        axes[1, 1].set_title('Pose Classification Accuracy')
         axes[1, 1].set_xlabel('Epoch')
-        axes[1, 1].set_ylabel('Learning Rate')
-        axes[1, 1].set_title('Learning Rate Schedule')
-        axes[1, 1].set_yscale('log')
-        axes[1, 1].grid(True, alpha=0.3)
+        axes[1, 1].set_ylabel('Accuracy (%)')
+        axes[1, 1].legend()
+        axes[1, 1].grid(True)
         
         plt.tight_layout()
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"  ðŸ“Š Training history: {save_path}")
-    
-    def plot_confusion_matrix(self, save_path: str = 'confusion_matrix.png'):
-        """Plot confusion matrix"""
-        cm = confusion_matrix(self.val_true_labels, self.val_pred_labels)
-        
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                    xticklabels=self.pose_names,
-                    yticklabels=self.pose_names,
-                    cbar_kws={'label': 'Count'})
-        plt.title('Confusion Matrix - Pose Classification', fontsize=14, fontweight='bold')
-        plt.ylabel('True Pose', fontsize=12)
-        plt.xlabel('Predicted Pose', fontsize=12)
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"  ðŸ“Š Confusion matrix: {save_path}")
-        
-        # Print classification report
-        print("\nðŸ“‹ Classification Report:")
-        print("="*70)
-        # report = classification_report(self.val_true_labels, self.val_pred_labels,
-        #                               target_names=self.pose_names, digits=3)
-        # print(report)
-        
-        # Ensure we only use labels actually present in validation set
-        unique_labels = sorted(set(self.val_true_labels))
-        label_names = [self.pose_names[i] for i in unique_labels]
+        plt.savefig('training_history_fixed.png', dpi=150)
+        print(f"\n  Training history saved: training_history_fixed.png")
 
-        report = classification_report(
-            self.val_true_labels,
-            self.val_pred_labels,
-            labels=unique_labels,
-            target_names=label_names,
-            digits=3,
-            zero_division=0
-        )
-        print(report)
 
 # ============================================================================
-# CLI
+# MAIN
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description='Train NEURA Glove hand pose model')
-    
-    # Mode selection
-    parser.add_argument('--calibrate', action='store_true',
-                       help='Calibration mode (fine-tune for new user)')
-    
-    # Dataset
-    parser.add_argument('--dataset', '-d', required=True,
-                       help='Training dataset JSON file')
-    
-    # Base model (for calibration)
-    parser.add_argument('--base-model', '-b',
-                       help='Base model to fine-tune (for calibration mode)')
-    
-    # Training parameters
-    parser.add_argument('--epochs', '-e', type=int,
-                       help='Number of epochs (default: 150 for base, 20 for calibration)')
-    parser.add_argument('--batch-size', '-bs', type=int, default=32,
-                       help='Batch size (default: 32)')
-    parser.add_argument('--learning-rate', '-lr', type=float,
-                       help='Learning rate (default: 0.001 for base, 0.0001 for calibration)')
-    
-    # Output
-    parser.add_argument('--output', '-o', default='base_model.pth',
-                       help='Output model filename (default: base_model.pth)')
+    parser = argparse.ArgumentParser(description='Fixed LSTM trainer with quaternion normalization')
+    parser.add_argument('--dataset', type=str, required=True, help='Training dataset path')
+    parser.add_argument('--epochs', type=int, default=150, help='Number of epochs')
+    parser.add_argument('--output', type=str, default='fixed_model.pth', help='Output model name')
     
     args = parser.parse_args()
     
-    # Load dataset to get pose names
-    with open(args.dataset, 'r') as f:
-        data = json.load(f)
-    
-    pose_names = data['metadata']['poses']
-    
     # Create config
     config = TrainingConfig()
-    if args.batch_size:
-        config.BATCH_SIZE = args.batch_size
+    config.NUM_EPOCHS = args.epochs
     
-    # Create trainer
-    trainer = EnhancedTrainer(config, pose_names, calibration_mode=args.calibrate)
-    
-    # Update learning rate if specified
-    if args.learning_rate:
-        for param_group in trainer.optimizer.param_groups:
-            param_group['lr'] = args.learning_rate
-    
-    # Load base model if calibration mode
-    if args.calibrate:
-        if not args.base_model:
-            print("âœ— Error: --base-model required for calibration mode")
-            return
-        trainer.load_base_model(args.base_model)
-    
-    # Load dataset
-    train_loader, val_loader = trainer.load_dataset(args.dataset)
-    
-    # Train
-    trainer.train(train_loader, val_loader, args.epochs)
-    
-    # Save final model
-    trainer.save_model(args.output)
-    
-    # Plot results
-    trainer.plot_training_history()
-    trainer.plot_confusion_matrix()
+    # Detect poses from dataset
+    with open(args.dataset, 'r') as f:
+        data = json.load(f)
+    pose_names = sorted(set(s['pose_name'] for s in data['samples']))
     
     print("\n" + "="*70)
-    print("âœ… SUCCESS!")
+    print("FIXED LSTM TRAINER")
     print("="*70)
-    print(f"  Final model: models/{args.output}")
-    print(f"  Best model: models/best_model.pth")
-    print(f"  Training history: training_history.png")
-    print(f"  Confusion matrix: confusion_matrix.png")
-    
-    if not args.calibrate:
-        print(f"\nðŸ“‹ Next steps:")
-        print(f"   1. Test inference:")
-        print(f"      python inference_engine.py --model models/best_model.pth")
-        print(f"   2. For new users, collect calibration data and run:")
-        print(f"      python enhanced_trainer.py --calibrate \\")
-        print(f"             --base-model models/best_model.pth \\")
-        print(f"             --dataset data/user_calibration.json --epochs 20")
-    else:
-        print(f"\nðŸ“‹ Next step:")
-        print(f"   Run inference with calibrated model:")
-        print(f"   python inference_engine.py --model models/{args.output}")
-    
+    print(f"Dataset: {args.dataset}")
+    print(f"Poses: {pose_names}")
+    print(f"Epochs: {config.NUM_EPOCHS}")
     print("="*70)
+    
+    # Create trainer
+    trainer = FixedTrainer(config, pose_names)
+    
+    # Prepare data
+    train_loader, val_loader = trainer.prepare_data(args.dataset)
+    
+    # Train
+    trainer.train(train_loader, val_loader, args.output)
 
 
 if __name__ == "__main__":

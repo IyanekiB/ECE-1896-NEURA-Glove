@@ -47,9 +47,9 @@ class TrainingConfig:
     SEQUENCE_LENGTH: int = 10
     
     # LSTM architecture
-    LSTM_HIDDEN_SIZE: int = 256
-    LSTM_NUM_LAYERS: int = 3
-    LSTM_DROPOUT: float = 0.3
+    LSTM_HIDDEN_SIZE: int = 128
+    LSTM_NUM_LAYERS: int = 2
+    LSTM_DROPOUT: float = 0.2
     
     # Input/Output
     INPUT_SIZE: int = 15
@@ -70,47 +70,93 @@ PIPE_NAME = "/tmp/neura_glove_pipe"  # Named pipe for Unity communication
 POSE_PIPE_NAME = "/tmp/neura_glove_pose_pipe"  # Separate pipe for pose data
 SEQUENCE_LENGTH = 10
 INPUT_SIZE = 15
-OUTPUT_SIZE = 147  # 21 joints Ã— 7 (3 position + 4 rotation quaternion)
+OUTPUT_SIZE = 147  # 21 joints Ãƒâ€” 7 (3 position + 4 rotation quaternion)
 TARGET_FPS = 30  # Increased for smoother VR interaction
 
 
 # ============================================================================
-# LSTM MODEL (must match training)
+# QUATERNION NORMALIZATION
+# ============================================================================
+
+class QuaternionNormalizationLayer(nn.Module):
+    """Normalizes quaternions to unit length"""
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim != 2:
+            return x
+        batch_size, total = x.shape
+        
+        # Case 1: divisible by 7 (joint format: 3 pos + 4 quat)
+        if total % 7 == 0:
+            n_joints = total // 7
+            try:
+                x_reshaped = x.view(batch_size, n_joints, 7)
+            except Exception:
+                return x
+            positions = x_reshaped[:, :, :3]
+            quaternions = x_reshaped[:, :, 3:]
+            quat_norms = torch.norm(quaternions, dim=2, keepdim=True) + 1e-8
+            quaternions_normalized = quaternions / quat_norms
+            x_normalized = torch.cat([positions, quaternions_normalized], dim=2)
+            return x_normalized.view(batch_size, total)
+        
+        # Case 2: divisible by 4 (pure quaternions)
+        if total % 4 == 0:
+            k = total // 4
+            try:
+                q_reshaped = x.view(batch_size, k, 4)
+            except Exception:
+                return x
+            q_norms = torch.norm(q_reshaped, dim=2, keepdim=True) + 1e-8
+            q_normalized = q_reshaped / q_norms
+            return q_normalized.view(batch_size, total)
+        
+        return x
+
+
+# ============================================================================
+# LSTM MODEL (must match training - FIXED VERSION)
 # ============================================================================
 
 class HandPoseLSTM(nn.Module):
-    """Hand pose LSTM model (same as training)"""
+    """
+    Fixed Hand Pose LSTM - matches enhanced_trainer.py architecture
+    
+    Key differences from old version:
+    - Simpler architecture (fewer layers, less overfitting)
+    - QuaternionNormalizationLayer for proper rotation output
+    - Compatible with models trained using FixedHandPoseLSTM
+    """
     
     def __init__(self, lstm_hidden_size, lstm_num_layers, lstm_dropout, num_poses, output_size=147):
         super().__init__()
         
+        # LSTM backbone (matches trainer)
         self.lstm = nn.LSTM(
             input_size=INPUT_SIZE,
             hidden_size=lstm_hidden_size,
             num_layers=lstm_num_layers,
             dropout=lstm_dropout if lstm_num_layers > 1 else 0,
-            batch_first=True
+            batch_first=True,
+            bidirectional=False
         )
         
+        # Simplified joint prediction head (matches trainer)
         self.joint_head = nn.Sequential(
-            nn.Linear(lstm_hidden_size, 512),
-            nn.ReLU(),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.4),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.BatchNorm1d(512),
-            nn.Dropout(0.4),
-            nn.Linear(512, output_size)
-        )
-        
-        self.classification_head = nn.Sequential(
             nn.Linear(lstm_hidden_size, 256),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(256, 128),
+            nn.Dropout(0.3),
+            nn.Linear(256, output_size),
+            QuaternionNormalizationLayer()  # Critical for proper rotations
+        )
+        
+        # Pose classification head (matches trainer)
+        self.classification_head = nn.Sequential(
+            nn.Linear(lstm_hidden_size, 128),
             nn.ReLU(),
-            nn.Dropout(0.4),
+            nn.Dropout(0.3),
             nn.Linear(128, num_poses)
         )
     
@@ -260,7 +306,7 @@ class EnhancedInferenceEngine:
         self.model.eval()
         
         print(f"  Model loaded ({sum(p.numel() for p in self.model.parameters()):,} parameters)")
-        print(f"  ✓ Output size: {self.output_size}")
+        print(f"  âœ“ Output size: {self.output_size}")
         print(f"  Trained poses: {self.pose_names}")
         print(f"  Device: {self.device}")
         
@@ -357,11 +403,11 @@ class EnhancedInferenceEngine:
     #     import os
     #     import sys
         
-    #     print("\nðŸ”— Setting up Unity communication pipes...")
+    #     print("\nÃ°Å¸â€â€” Setting up Unity communication pipes...")
         
     #     # Check if running on Windows
     #     if sys.platform == 'win32':
-    #         print("\nâš ï¸  WARNING: Named pipes are not supported on Windows in this version.")
+    #         print("\nÃ¢Å¡Â Ã¯Â¸Â  WARNING: Named pipes are not supported on Windows in this version.")
     #         print("   Unity integration is disabled for this session.")
     #         print("\n   For Windows support, you have two options:")
     #         print("   1. Run this script in WSL (Windows Subsystem for Linux)")
@@ -379,24 +425,24 @@ class EnhancedInferenceEngine:
     #     if os.path.exists(PIPE_NAME):
     #         os.remove(PIPE_NAME)
     #     os.mkfifo(PIPE_NAME)
-    #     print(f"  âœ“ Created joint pipe: {PIPE_NAME}")
+    #     print(f"  Ã¢Å“â€œ Created joint pipe: {PIPE_NAME}")
         
     #     # Pose data pipe (optional)
     #     if self.send_pose_to_unity:
     #         if os.path.exists(POSE_PIPE_NAME):
     #             os.remove(POSE_PIPE_NAME)
     #         os.mkfifo(POSE_PIPE_NAME)
-    #         print(f"  âœ“ Created pose pipe: {POSE_PIPE_NAME}")
+    #         print(f"  Ã¢Å“â€œ Created pose pipe: {POSE_PIPE_NAME}")
         
-    #     print(f"  â³ Waiting for Unity to connect...")
+    #     print(f"  Ã¢ÂÂ³ Waiting for Unity to connect...")
         
     #     # Open pipes (blocks until Unity connects)
     #     self.joint_pipe = open(PIPE_NAME, 'wb', buffering=0)
-    #     print(f"  âœ“ Unity connected to joint pipe!")
+    #     print(f"  Ã¢Å“â€œ Unity connected to joint pipe!")
         
     #     if self.send_pose_to_unity:
     #         self.pose_pipe = open(POSE_PIPE_NAME, 'wb', buffering=0)
-    #         print(f"  âœ“ Unity connected to pose pipe!")
+    #         print(f"  Ã¢Å“â€œ Unity connected to pose pipe!")
 
     def setup_unity_connection(self):
         """Setup UDP connection to Unity (cross-platform)"""
@@ -431,7 +477,7 @@ class EnhancedInferenceEngine:
     #         self.joint_pipe.write(packet)
     #         self.joint_pipe.flush()
     #     except BrokenPipeError:
-    #         print("\nâš ï¸  Unity disconnected from joint pipe")
+    #         print("\nÃ¢Å¡Â Ã¯Â¸Â  Unity disconnected from joint pipe")
     #         self.joint_pipe = None
 
     def send_joints_to_unity(self, joint_data: np.ndarray):
@@ -518,15 +564,15 @@ class EnhancedInferenceEngine:
         # Confidence bar visualization
         bar_length = 20
         filled = int(bar_length * confidence)
-        bar = '█' * filled + '░' * (bar_length - filled)
+        bar = 'â–ˆ' * filled + 'â–‘' * (bar_length - filled)
         
         # Confidence color indicator
         if confidence >= 0.8:
-            conf_indicator = "🟢"
+            conf_indicator = "ðŸŸ¢"
         elif confidence >= 0.6:
-            conf_indicator = "🟡"
+            conf_indicator = "ðŸŸ¡"
         else:
-            conf_indicator = "🔴"
+            conf_indicator = "ðŸ”´"
         
         # Display current pose
         print(f"\n{'='*70}")
@@ -541,8 +587,8 @@ class EnhancedInferenceEngine:
         for pose, conf in sorted_confidences:
             mini_bar_len = 15
             mini_filled = int(mini_bar_len * conf)
-            mini_bar = '█' * mini_filled + '░' * (mini_bar_len - mini_filled)
-            marker = "◄" if pose == pose_name else " "
+            mini_bar = 'â–ˆ' * mini_filled + 'â–‘' * (mini_bar_len - mini_filled)
+            marker = "â—„" if pose == pose_name else " "
             print(f"  {pose:12s}: [{mini_bar}] {conf*100:5.1f}% {marker}")
         print(f"{'='*70}\n")
     
@@ -563,11 +609,11 @@ class EnhancedInferenceEngine:
         if not no_unity:
             self.setup_unity_connection()
         else:
-            print("\nâš ï¸  Unity integration disabled (--no-unity flag)")
+            print("\nÃ¢Å¡Â Ã¯Â¸Â  Unity integration disabled (--no-unity flag)")
             self.joint_pipe = None
             self.pose_pipe = None
         
-        print("\nðŸŽ¬ Running inference with pose detection...")
+        print("\nÃ°Å¸Å½Â¬ Running inference with pose detection...")
         print(f"   Target: {TARGET_FPS} Hz")
         print("   Press Ctrl+C to stop")
         print("-"*70)
@@ -626,8 +672,8 @@ class EnhancedInferenceEngine:
                                 fps = self.frame_count / elapsed
                                 
                                 # Compact pose display
-                                conf_emoji = "🟢" if confidence >= 0.8 else \
-                                           "🟡" if confidence >= 0.6 else "🔴"
+                                conf_emoji = "ðŸŸ¢" if confidence >= 0.8 else \
+                                           "ðŸŸ¡" if confidence >= 0.6 else "ðŸ”´"
                                 
                                 print(f"Frame {self.frame_count:5d} | FPS: {fps:5.1f} | "
                                       f"Pose: {pose_name:12s} {conf_emoji} {confidence*100:5.1f}% | "
@@ -680,7 +726,7 @@ class EnhancedInferenceEngine:
                                      key=lambda x: x[1], reverse=True):
                 percentage = (count / total_confident * 100) if total_confident > 0 else 0
                 bar_len = int(percentage / 5)
-                bar = '▓' * bar_len
+                bar = 'â–“' * bar_len
                 print(f"  {pose:12s}: {count:5d} frames ({percentage:5.1f}%) {bar}")
             print("="*70)
 
