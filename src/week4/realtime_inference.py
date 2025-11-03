@@ -82,12 +82,12 @@ class FlexToRotationInference:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
-        print("✓ Model loaded successfully")
+        print("[OK] Model loaded successfully")
         
         # UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.unity_address = (UNITY_IP, UNITY_PORT)
-        print(f"✓ UDP socket created for {UNITY_IP}:{UNITY_PORT}")
+        print(f"[OK] UDP socket created for {UNITY_IP}:{UNITY_PORT}")
         
         # Statistics
         self.frame_count = 0
@@ -99,6 +99,7 @@ class FlexToRotationInference:
         normalized = (voltage - FLEX_MIN_VOLTAGE) / (FLEX_MAX_VOLTAGE - FLEX_MIN_VOLTAGE)
         angle = 90.0 * (1.0 - normalized)
         return float(angle)
+
     
     def parse_ble_data(self, data_string):
         """Parse BLE data from ESP32"""
@@ -115,8 +116,10 @@ class FlexToRotationInference:
                 self.voltage_to_angle(values[3]),  # Ring
                 self.voltage_to_angle(values[4])   # Pinky
             ]
+
+            imu_quat = [float(values[5]), float(values[6]), float(values[7]), float(values[8])]
             
-            return np.array(flex_angles)
+            return np.array(flex_angles), imu_quat
         
         except Exception as e:
             print(f"Parse error: {e}")
@@ -133,7 +136,7 @@ class FlexToRotationInference:
         rotations = self.output_scaler.inverse_transform(output_scaled)[0]
         return rotations
     
-    def build_unity_packet(self, rotations):
+    def build_unity_packet(self, rotations, imu_quat):
         """Build Unity packet with proper rotation axis
         
         FIXED: Using X-axis rotation for finger curl (not Y-axis)
@@ -162,12 +165,13 @@ class FlexToRotationInference:
                 "hand": "left",
                 "wrist": {
                     "position": [0, 0, 0],
-                    "rotation": [0, 0, 0, 1]
+                    "rotation": imu_quat
                 },
                 "thumb": {
                     "metacarpal": {
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": self.euler_to_quaternion(21.194, 43.526, -69.284)
+
                     },
                     "proximal": {
                         "position": [0, 0, 0],
@@ -175,7 +179,7 @@ class FlexToRotationInference:
                     },
                     "intermediate": {  # Joint 3
                         "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(thumb_y)
+                        "rotation": [0, 0, 0, 1]
                     },
                     "distal": {
                         "position": [0, 0, 0],
@@ -189,7 +193,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 6
                         "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(index_y)
+                        "rotation": [0, 0, 0, 1]
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -207,7 +211,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 10
                         "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(middle_y)
+                        "rotation": [0, 0, 0, 1]
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -225,7 +229,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 14
                         "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(ring_y)
+                        "rotation": [0, 0, 0, 1]
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -243,7 +247,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 18
                         "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(pinky_y)
+                        "rotation": [0, 0, 0, 1]
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -366,6 +370,39 @@ class FlexToRotationInference:
             }
         
         return packet
+
+    def euler_to_quaternion(self, euler_x, euler_y, euler_z):
+        """
+        Convert Unity Euler angles (in degrees, XYZ order) to quaternion.
+
+        Args:
+            euler_x: Rotation around X axis in degrees
+            euler_y: Rotation around Y axis in degrees
+            euler_z: Rotation around Z axis in degrees
+
+        Returns: [x, y, z, w] quaternion
+        """
+        # Convert degrees to radians
+        x = np.radians(euler_x)
+        y = np.radians(euler_y)
+        z = np.radians(euler_z)
+
+        # Unity uses ZXY rotation order
+        # Calculate half angles
+        cx = np.cos(x * 0.5)
+        sx = np.sin(x * 0.5)
+        cy = np.cos(y * 0.5)
+        sy = np.sin(y * 0.5)
+        cz = np.cos(z * 0.5)
+        sz = np.sin(z * 0.5)
+
+        # ZXY order quaternion multiplication
+        qw = cx * cy * cz - sx * sy * sz
+        qx = sx * cy * cz + cx * sy * sz
+        qy = cx * sy * cz - sx * cy * sz
+        qz = cx * cy * sz + sx * sy * cz
+
+        return [float(qx), float(qy), float(qz), float(qw)]
     
     def send_to_unity(self, packet):
         """Send packet to Unity via UDP"""
@@ -380,12 +417,12 @@ class FlexToRotationInference:
         """Handle BLE notifications"""
         data_string = data.decode('utf-8')
         
-        flex_angles = self.parse_ble_data(data_string)
+        flex_angles, imu_quat = self.parse_ble_data(data_string)
         if flex_angles is None:
             return
         
         rotations = self.predict_rotations(flex_angles)
-        packet = self.build_unity_packet(rotations)
+        packet = self.build_unity_packet(rotations, imu_quat)
         self.send_to_unity(packet)
         
         if self.frame_count % 10 == 0:
@@ -420,9 +457,9 @@ class FlexToRotationInference:
             print(f"Connected: {client.is_connected}")
             
             await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
-            print("✓ Subscribed to notifications")
+            print("[OK] Subscribed to notifications")
             
-            print("\n🚀 STREAMING TO UNITY")
+            print("\n>>> STREAMING TO UNITY")
             print("Press Ctrl+C to stop\n")
             
             self.start_time = time.time()
