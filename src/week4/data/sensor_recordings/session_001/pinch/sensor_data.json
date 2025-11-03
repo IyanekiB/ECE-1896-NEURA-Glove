@@ -1,0 +1,1194 @@
+{
+  "metadata": {
+    "pose_name": "pinch",
+    "session_id": "session_001",
+    "total_samples": 29,
+    "duration_seconds": 2.8901407718658447,
+    "collection_time": "2025-11-02T20:36:01.880591",
+    "sampling_rate_hz": 10.034113314583601
+  },
+  "calibration": {
+    "thumb": {
+      "min": 0.55,
+      "max": 1.65
+    },
+    "index": {
+      "min": 0.55,
+      "max": 1.65
+    },
+    "middle": {
+      "min": 0.55,
+      "max": 1.65
+    },
+    "ring": {
+      "min": 0.55,
+      "max": 1.65
+    },
+    "pinky": {
+      "min": 0.55,
+      "max": 1.65
+    }
+  },
+  "samples": [
+    {
+      "tick_index": 0,
+      "timestamp": 0.07061100006103516,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.435,
+          "index": 1.427,
+          "middle": 0.816,
+          "ring": 0.834,
+          "pinky": 0.649
+        },
+        "flex_angles": {
+          "thumb": 17.59090909090908,
+          "index": 18.24545454545454,
+          "middle": 68.23636363636365,
+          "ring": 66.76363636363638,
+          "pinky": 81.9
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 1,
+      "timestamp": 0.2493140697479248,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.431,
+          "index": 1.424,
+          "middle": 0.817,
+          "ring": 0.827,
+          "pinky": 0.661
+        },
+        "flex_angles": {
+          "thumb": 17.918181818181807,
+          "index": 18.49090909090909,
+          "middle": 68.15454545454546,
+          "ring": 67.33636363636364,
+          "pinky": 80.91818181818182
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 2,
+      "timestamp": 0.3104114532470703,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.431,
+          "index": 1.428,
+          "middle": 0.824,
+          "ring": 0.82,
+          "pinky": 0.661
+        },
+        "flex_angles": {
+          "thumb": 17.918181818181807,
+          "index": 18.16363636363636,
+          "middle": 67.58181818181819,
+          "ring": 67.90909090909092,
+          "pinky": 80.91818181818182
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 3,
+      "timestamp": 0.4646923542022705,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.434,
+          "index": 1.427,
+          "middle": 0.817,
+          "ring": 0.823,
+          "pinky": 0.656
+        },
+        "flex_angles": {
+          "thumb": 17.672727272727276,
+          "index": 18.24545454545454,
+          "middle": 68.15454545454546,
+          "ring": 67.66363636363637,
+          "pinky": 81.32727272727273
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 4,
+      "timestamp": 0.4950873851776123,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.435,
+          "index": 1.429,
+          "middle": 0.813,
+          "ring": 0.822,
+          "pinky": 0.645
+        },
+        "flex_angles": {
+          "thumb": 17.59090909090908,
+          "index": 18.081818181818175,
+          "middle": 68.48181818181818,
+          "ring": 67.74545454545455,
+          "pinky": 82.22727272727273
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 5,
+      "timestamp": 0.5550763607025146,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.433,
+          "index": 1.427,
+          "middle": 0.81,
+          "ring": 0.824,
+          "pinky": 0.654
+        },
+        "flex_angles": {
+          "thumb": 17.754545454545443,
+          "index": 18.24545454545454,
+          "middle": 68.72727272727273,
+          "ring": 67.58181818181819,
+          "pinky": 81.4909090909091
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 6,
+      "timestamp": 0.6706180572509766,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.429,
+          "index": 1.43,
+          "middle": 0.811,
+          "ring": 0.825,
+          "pinky": 0.655
+        },
+        "flex_angles": {
+          "thumb": 18.081818181818175,
+          "index": 17.999999999999996,
+          "middle": 68.64545454545454,
+          "ring": 67.5,
+          "pinky": 81.4090909090909
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 7,
+      "timestamp": 0.7902147769927979,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.433,
+          "index": 1.427,
+          "middle": 0.811,
+          "ring": 0.832,
+          "pinky": 0.664
+        },
+        "flex_angles": {
+          "thumb": 17.754545454545443,
+          "index": 18.24545454545454,
+          "middle": 68.64545454545454,
+          "ring": 66.92727272727272,
+          "pinky": 80.67272727272727
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 8,
+      "timestamp": 0.9096713066101074,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.43,
+          "index": 1.424,
+          "middle": 0.814,
+          "ring": 0.83,
+          "pinky": 0.657
+        },
+        "flex_angles": {
+          "thumb": 17.999999999999996,
+          "index": 18.49090909090909,
+          "middle": 68.4,
+          "ring": 67.0909090909091,
+          "pinky": 81.24545454545455
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 9,
+      "timestamp": 1.030729055404663,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.427,
+          "index": 1.421,
+          "middle": 0.816,
+          "ring": 0.826,
+          "pinky": 0.665
+        },
+        "flex_angles": {
+          "thumb": 18.24545454545454,
+          "index": 18.73636363636363,
+          "middle": 68.23636363636365,
+          "ring": 67.41818181818182,
+          "pinky": 80.5909090909091
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 10,
+      "timestamp": 1.0906870365142822,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.427,
+          "index": 1.424,
+          "middle": 0.819,
+          "ring": 0.829,
+          "pinky": 0.656
+        },
+        "flex_angles": {
+          "thumb": 18.24545454545454,
+          "index": 18.49090909090909,
+          "middle": 67.9909090909091,
+          "ring": 67.17272727272727,
+          "pinky": 81.32727272727273
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 11,
+      "timestamp": 1.1500434875488281,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.437,
+          "index": 1.422,
+          "middle": 0.819,
+          "ring": 0.831,
+          "pinky": 0.651
+        },
+        "flex_angles": {
+          "thumb": 17.427272727272715,
+          "index": 18.654545454545456,
+          "middle": 67.9909090909091,
+          "ring": 67.00909090909092,
+          "pinky": 81.73636363636363
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 12,
+      "timestamp": 1.3301970958709717,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.446,
+          "index": 1.423,
+          "middle": 0.825,
+          "ring": 0.835,
+          "pinky": 0.652
+        },
+        "flex_angles": {
+          "thumb": 16.690909090909088,
+          "index": 18.572727272727267,
+          "middle": 67.5,
+          "ring": 66.68181818181819,
+          "pinky": 81.65454545454546
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 13,
+      "timestamp": 1.3911147117614746,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.444,
+          "index": 1.423,
+          "middle": 0.824,
+          "ring": 0.827,
+          "pinky": 0.661
+        },
+        "flex_angles": {
+          "thumb": 16.854545454545452,
+          "index": 18.572727272727267,
+          "middle": 67.58181818181819,
+          "ring": 67.33636363636364,
+          "pinky": 80.91818181818182
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 14,
+      "timestamp": 1.4489285945892334,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.448,
+          "index": 1.43,
+          "middle": 0.822,
+          "ring": 0.822,
+          "pinky": 0.658
+        },
+        "flex_angles": {
+          "thumb": 16.527272727272724,
+          "index": 17.999999999999996,
+          "middle": 67.74545454545455,
+          "ring": 67.74545454545455,
+          "pinky": 81.16363636363637
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 15,
+      "timestamp": 1.5702390670776367,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.447,
+          "index": 1.431,
+          "middle": 0.811,
+          "ring": 0.828,
+          "pinky": 0.65
+        },
+        "flex_angles": {
+          "thumb": 16.609090909090902,
+          "index": 17.918181818181807,
+          "middle": 68.64545454545454,
+          "ring": 67.25454545454546,
+          "pinky": 81.81818181818181
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 16,
+      "timestamp": 1.7728769779205322,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.447,
+          "index": 1.426,
+          "middle": 0.814,
+          "ring": 0.826,
+          "pinky": 0.646
+        },
+        "flex_angles": {
+          "thumb": 16.609090909090902,
+          "index": 18.327272727272724,
+          "middle": 68.4,
+          "ring": 67.41818181818182,
+          "pinky": 82.14545454545454
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 17,
+      "timestamp": 1.774395227432251,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.433,
+          "index": 1.426,
+          "middle": 0.815,
+          "ring": 0.83,
+          "pinky": 0.663
+        },
+        "flex_angles": {
+          "thumb": 17.754545454545443,
+          "index": 18.327272727272724,
+          "middle": 68.31818181818183,
+          "ring": 67.0909090909091,
+          "pinky": 80.75454545454545
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 18,
+      "timestamp": 1.870610237121582,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.436,
+          "index": 1.426,
+          "middle": 0.82,
+          "ring": 0.828,
+          "pinky": 0.661
+        },
+        "flex_angles": {
+          "thumb": 17.50909090909091,
+          "index": 18.327272727272724,
+          "middle": 67.90909090909092,
+          "ring": 67.25454545454546,
+          "pinky": 80.91818181818182
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 19,
+      "timestamp": 1.9901127815246582,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.435,
+          "index": 1.424,
+          "middle": 0.823,
+          "ring": 0.831,
+          "pinky": 0.662
+        },
+        "flex_angles": {
+          "thumb": 17.59090909090908,
+          "index": 18.49090909090909,
+          "middle": 67.66363636363637,
+          "ring": 67.00909090909092,
+          "pinky": 80.83636363636364
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 20,
+      "timestamp": 2.0496280193328857,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.444,
+          "index": 1.418,
+          "middle": 0.821,
+          "ring": 0.825,
+          "pinky": 0.651
+        },
+        "flex_angles": {
+          "thumb": 16.854545454545452,
+          "index": 18.981818181818184,
+          "middle": 67.82727272727273,
+          "ring": 67.5,
+          "pinky": 81.73636363636363
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 21,
+      "timestamp": 2.170485019683838,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.433,
+          "index": 1.42,
+          "middle": 0.825,
+          "ring": 0.825,
+          "pinky": 0.662
+        },
+        "flex_angles": {
+          "thumb": 17.754545454545443,
+          "index": 18.81818181818182,
+          "middle": 67.5,
+          "ring": 67.5,
+          "pinky": 80.83636363636364
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 22,
+      "timestamp": 2.289900302886963,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.433,
+          "index": 1.427,
+          "middle": 0.821,
+          "ring": 0.83,
+          "pinky": 0.656
+        },
+        "flex_angles": {
+          "thumb": 17.754545454545443,
+          "index": 18.24545454545454,
+          "middle": 67.82727272727273,
+          "ring": 67.0909090909091,
+          "pinky": 81.32727272727273
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 23,
+      "timestamp": 2.350156307220459,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.436,
+          "index": 1.43,
+          "middle": 0.824,
+          "ring": 0.836,
+          "pinky": 0.66
+        },
+        "flex_angles": {
+          "thumb": 17.50909090909091,
+          "index": 17.999999999999996,
+          "middle": 67.58181818181819,
+          "ring": 66.6,
+          "pinky": 81.0
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 24,
+      "timestamp": 2.5297048091888428,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.439,
+          "index": 1.428,
+          "middle": 0.824,
+          "ring": 0.832,
+          "pinky": 0.649
+        },
+        "flex_angles": {
+          "thumb": 17.26363636363635,
+          "index": 18.16363636363636,
+          "middle": 67.58181818181819,
+          "ring": 66.92727272727272,
+          "pinky": 81.9
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 25,
+      "timestamp": 2.59047532081604,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.44,
+          "index": 1.434,
+          "middle": 0.824,
+          "ring": 0.836,
+          "pinky": 0.659
+        },
+        "flex_angles": {
+          "thumb": 17.181818181818183,
+          "index": 17.672727272727276,
+          "middle": 67.58181818181819,
+          "ring": 66.6,
+          "pinky": 81.08181818181818
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 26,
+      "timestamp": 2.649630546569824,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.436,
+          "index": 1.435,
+          "middle": 0.829,
+          "ring": 0.839,
+          "pinky": 0.66
+        },
+        "flex_angles": {
+          "thumb": 17.50909090909091,
+          "index": 17.59090909090908,
+          "middle": 67.17272727272727,
+          "ring": 66.35454545454546,
+          "pinky": 81.0
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 27,
+      "timestamp": 2.830111265182495,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.435,
+          "index": 1.427,
+          "middle": 0.835,
+          "ring": 0.843,
+          "pinky": 0.671
+        },
+        "flex_angles": {
+          "thumb": 17.59090909090908,
+          "index": 18.24545454545454,
+          "middle": 66.68181818181819,
+          "ring": 66.02727272727273,
+          "pinky": 80.1
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    },
+    {
+      "tick_index": 28,
+      "timestamp": 2.8901407718658447,
+      "pose_name": "pinch",
+      "session_id": "session_001",
+      "data": {
+        "flex_voltages": {
+          "thumb": 1.436,
+          "index": 1.42,
+          "middle": 0.839,
+          "ring": 0.832,
+          "pinky": 0.666
+        },
+        "flex_angles": {
+          "thumb": 17.50909090909091,
+          "index": 18.81818181818182,
+          "middle": 66.35454545454546,
+          "ring": 66.92727272727272,
+          "pinky": 80.5090909090909
+        },
+        "imu": {
+          "quaternion": {
+            "w": 0.8535,
+            "x": -0.3085,
+            "y": -0.2698,
+            "z": 0.3218
+          },
+          "accelerometer": {
+            "x": 1.508,
+            "y": -6.379,
+            "z": 6.305
+          },
+          "gyroscope": {
+            "x": 0.867,
+            "y": 2.604,
+            "z": -0.369
+          }
+        }
+      }
+    }
+  ]
+}

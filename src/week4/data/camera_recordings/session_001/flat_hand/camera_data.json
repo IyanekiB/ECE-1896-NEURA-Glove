@@ -1,0 +1,1869 @@
+{
+  "metadata": {
+    "pose_name": "flat_hand",
+    "session_id": "session_001",
+    "total_samples": 56,
+    "duration_seconds": 3.009037494659424,
+    "collection_time": "2025-11-02T20:37:23.225768",
+    "sampling_rate_hz": 18.610602260487394,
+    "target_joints": {
+      "3": "thumb_ip",
+      "6": "index_pip",
+      "10": "middle_pip",
+      "14": "ring_pip",
+      "18": "pinky_pip"
+    },
+    "hand": "left",
+    "recording_hand": "right"
+  },
+  "samples": [
+    {
+      "tick_index": 0,
+      "timestamp": 0.6901905536651611,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 1.8199221885615628
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.125766659277772
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.9326677132408605
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.06351405749453
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.332995664610394
+        }
+      }
+    },
+    {
+      "tick_index": 1,
+      "timestamp": 0.8009264469146729,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.2215761418323154
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.0522369137778895
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.607062008199904
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.622625661693306
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.506095325312188
+        }
+      }
+    },
+    {
+      "tick_index": 2,
+      "timestamp": 0.8451354503631592,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.87975909055244
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.6992871191455095
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.744059836923668
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.505345284996181
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.916914549127412
+        }
+      }
+    },
+    {
+      "tick_index": 3,
+      "timestamp": 0.8808565139770508,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.588949843293861
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.590121269181481
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.0620896852247768
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.279317821153825
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.888870773135025
+        }
+      }
+    },
+    {
+      "tick_index": 4,
+      "timestamp": 0.9200949668884277,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.393607226706493
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.212622103843415
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.764138534431723
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 7.942686086294174
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.293247502676081
+        }
+      }
+    },
+    {
+      "tick_index": 5,
+      "timestamp": 0.9471797943115234,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.191749734785347
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.485827242129261
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.782745829065746
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.30936341910298
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.90517158030461
+        }
+      }
+    },
+    {
+      "tick_index": 6,
+      "timestamp": 0.9754571914672852,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.037982474979557
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.640423394798759
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.166370675564977
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.739499122718854
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.121592220918401
+        }
+      }
+    },
+    {
+      "tick_index": 7,
+      "timestamp": 1.008115530014038,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.3420114608272797
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.507980947672394
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.806253229871686
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.485083652846129
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.103523355526406
+        }
+      }
+    },
+    {
+      "tick_index": 8,
+      "timestamp": 1.0418193340301514,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.983615355013825
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.371000232875815
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.150265590809113
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.201849377180949
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.948396653334939
+        }
+      }
+    },
+    {
+      "tick_index": 9,
+      "timestamp": 1.0726282596588135,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.428281487897948
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.345140734854013
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.275961719103748
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.411784953334148
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.322959387480807
+        }
+      }
+    },
+    {
+      "tick_index": 10,
+      "timestamp": 1.1064515113830566,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.66867404151148
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.493352191900911
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.272017407764281
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.363157680416407
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.062526962476454
+        }
+      }
+    },
+    {
+      "tick_index": 11,
+      "timestamp": 1.1329751014709473,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.4872589424954725
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.281117348690486
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.541832688150251
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.794256769697569
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.42057426765679
+        }
+      }
+    },
+    {
+      "tick_index": 12,
+      "timestamp": 1.1666388511657715,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.0997433639236363
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.487510093382568
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.486623616577944
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.107605758852074
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.844844229119019
+        }
+      }
+    },
+    {
+      "tick_index": 13,
+      "timestamp": 1.2109320163726807,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.834505327833824
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.3584006888924876
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.809731759471603
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.619681868021416
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.123925122942055
+        }
+      }
+    },
+    {
+      "tick_index": 14,
+      "timestamp": 1.2614998817443848,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.9827491938656294
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.302502759939841
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.898854544915409
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.684055174927053
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.451731840637223
+        }
+      }
+    },
+    {
+      "tick_index": 15,
+      "timestamp": 1.2940380573272705,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.7584616350919333
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.756808334359832
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.575446821914582
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.870218827677832
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.230583717437781
+        }
+      }
+    },
+    {
+      "tick_index": 16,
+      "timestamp": 1.3299446105957031,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.9798169339991887
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.356236501638222
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.9728143791263903
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.475176416025917
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.159621429972034
+        }
+      }
+    },
+    {
+      "tick_index": 17,
+      "timestamp": 1.3613581657409668,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.19650653245003
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.87407290267727
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.7042123863119656
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.07407933373996
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.559261364109261
+        }
+      }
+    },
+    {
+      "tick_index": 18,
+      "timestamp": 1.3900706768035889,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.349057703856005
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.299394871881049
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.145213606324063
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.410722498707173
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.738797550400264
+        }
+      }
+    },
+    {
+      "tick_index": 19,
+      "timestamp": 1.415731430053711,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.688458979190315
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.026292707270727
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.132048603073812
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.16598124101371
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.26443899874235
+        }
+      }
+    },
+    {
+      "tick_index": 20,
+      "timestamp": 1.4450807571411133,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.462610805708465
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 3.8294660153826072
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.015559936159832
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.022025323195393
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.213887242732781
+        }
+      }
+    },
+    {
+      "tick_index": 21,
+      "timestamp": 1.478771686553955,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.399676525720324
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 3.918944355394828
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.9432532267812945
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.208978005002265
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.261627916478986
+        }
+      }
+    },
+    {
+      "tick_index": 22,
+      "timestamp": 1.511014699935913,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.566666946153589
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 3.783964218986327
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.7382270497214023
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.626373170665445
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.28759900892868
+        }
+      }
+    },
+    {
+      "tick_index": 23,
+      "timestamp": 1.5461623668670654,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.876019434710429
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 3.751319531801755
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.8495728242216813
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.548913081249324
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.9574374485792
+        }
+      }
+    },
+    {
+      "tick_index": 24,
+      "timestamp": 1.5811092853546143,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.639470562722082
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.061127237666071
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.750656917538521
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.872714454235862
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.210817470596766
+        }
+      }
+    },
+    {
+      "tick_index": 25,
+      "timestamp": 1.620760440826416,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.778003788860744
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.053625525422504
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.2745262704725207
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.688492996666511
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.478854830629317
+        }
+      }
+    },
+    {
+      "tick_index": 26,
+      "timestamp": 1.6559607982635498,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.7094010237233874
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.5310311287085625
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.1416912652819917
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.479321838978521
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.430406880542648
+        }
+      }
+    },
+    {
+      "tick_index": 27,
+      "timestamp": 1.6849474906921387,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.2433823068779617
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.801786994350664
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.207973627362577
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.684799806270618
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.463429311323338
+        }
+      }
+    },
+    {
+      "tick_index": 28,
+      "timestamp": 1.7114882469177246,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.783693390063277
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.57785481395014
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.305977338568084
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.938545495999108
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.426276335387854
+        }
+      }
+    },
+    {
+      "tick_index": 29,
+      "timestamp": 1.7383677959442139,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.9875576007120372
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.051749565135452
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.022948693942638
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.714193520464221
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.177832127748317
+        }
+      }
+    },
+    {
+      "tick_index": 30,
+      "timestamp": 1.7752251625061035,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4367793884747755
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.789009007329895
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.18153796337765
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.627331710736783
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.144429796126914
+        }
+      }
+    },
+    {
+      "tick_index": 31,
+      "timestamp": 1.8129701614379883,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.3652713338320126
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.060422325086492
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.9474994497271467
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.567878078746375
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.357892534156392
+        }
+      }
+    },
+    {
+      "tick_index": 32,
+      "timestamp": 1.8525111675262451,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.901113616618588
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.183545542096908
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.363255956422009
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.956723494508637
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.566526305816609
+        }
+      }
+    },
+    {
+      "tick_index": 33,
+      "timestamp": 1.8827085494995117,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.4829050315817796
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.807914536912946
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.0307329917972936
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.812533760411725
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.426810127845357
+        }
+      }
+    },
+    {
+      "tick_index": 34,
+      "timestamp": 1.91241455078125,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.8547367644241746
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.108096834351457
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.235564154379148
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.712840053965792
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.445775057935251
+        }
+      }
+    },
+    {
+      "tick_index": 35,
+      "timestamp": 1.9429965019226074,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.152588100512915
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.284065750581362
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.196836529961061
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.884304221210385
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.9621661872525635
+        }
+      }
+    },
+    {
+      "tick_index": 36,
+      "timestamp": 1.995978832244873,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4425988814796256
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.620401653271372
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.9037811582860087
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 7.884802320539322
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 6.92175815972368
+        }
+      }
+    },
+    {
+      "tick_index": 37,
+      "timestamp": 2.0483102798461914,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.7182548661557036
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.642923805443729
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.2799685099247142
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.18254323863873
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.245478484905604
+        }
+      }
+    },
+    {
+      "tick_index": 38,
+      "timestamp": 2.1046345233917236,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.3301321100452697
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.027202772338526
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.873442235590389
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.119707454094922
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.377335717868746
+        }
+      }
+    },
+    {
+      "tick_index": 39,
+      "timestamp": 2.151865005493164,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.6764848586277736
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.975890657721834
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.0372681371136423
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.970761556815063
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.703943862443182
+        }
+      }
+    },
+    {
+      "tick_index": 40,
+      "timestamp": 2.2273287773132324,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4602032513308814
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.181419215395678
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.1788395290542724
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.254436096845566
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.668584451486723
+        }
+      }
+    },
+    {
+      "tick_index": 41,
+      "timestamp": 2.2856526374816895,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.7980620163994985
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.251520610209383
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.2110282785618125
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.786271096378343
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.497169961618965
+        }
+      }
+    },
+    {
+      "tick_index": 42,
+      "timestamp": 2.345499277114868,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4335590611139537
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.765622469451088
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.1905526236259902
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.426126683737024
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.164817376633948
+        }
+      }
+    },
+    {
+      "tick_index": 43,
+      "timestamp": 2.384734869003296,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.7612145368115932
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.017610176246848
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.6960908390245777
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.418516969595032
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.1645475903007
+        }
+      }
+    },
+    {
+      "tick_index": 44,
+      "timestamp": 2.41171932220459,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.125072055333945
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.254780399992072
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4589071625771197
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.317002679723188
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 6.756606162808694
+        }
+      }
+    },
+    {
+      "tick_index": 45,
+      "timestamp": 2.453071355819702,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 2.7709785933990645
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.66876086293108
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.3504139877259718
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.497433413690217
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.081567051236021
+        }
+      }
+    },
+    {
+      "tick_index": 46,
+      "timestamp": 2.5013012886047363,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4024102627897577
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.257405609942367
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.3248796147011177
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.525584379543261
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.527829906311766
+        }
+      }
+    },
+    {
+      "tick_index": 47,
+      "timestamp": 2.566803455352783,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 3.4790859984696567
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.07390882899864
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.8929818054102014
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.305521258414515
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.516630982308385
+        }
+      }
+    },
+    {
+      "tick_index": 48,
+      "timestamp": 2.612330675125122,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.749527170630145
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.402294156016893
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.8319279995480002
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.162513972338502
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.993846665822147
+        }
+      }
+    },
+    {
+      "tick_index": 49,
+      "timestamp": 2.682579278945923,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.513617791816856
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 5.039093984142767
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.1994615579230725
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.567336447912965
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.704392447119531
+        }
+      }
+    },
+    {
+      "tick_index": 50,
+      "timestamp": 2.7496798038482666,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.800077128966848
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.633187044365201
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.8602086046292783
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.36904868241733
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.7031846080952
+        }
+      }
+    },
+    {
+      "tick_index": 51,
+      "timestamp": 2.8087127208709717,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 5.438485791512363
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.30331379898098
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.167817982325687
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 9.056698514935974
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.554029405678236
+        }
+      }
+    },
+    {
+      "tick_index": 52,
+      "timestamp": 2.8687846660614014,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 5.9549593788478745
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.396664329125954
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 3.9672563135971473
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.723242927572826
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.673038284606776
+        }
+      }
+    },
+    {
+      "tick_index": 53,
+      "timestamp": 2.9199140071868896,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 5.653144723307605
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.837238284208198
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.001529427413843
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.39875035060281
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 9.184148358600751
+        }
+      }
+    },
+    {
+      "tick_index": 54,
+      "timestamp": 2.9611194133758545,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 5.5448957129508045
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.93235259256771
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 4.184593876557358
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 8.731792069191485
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 8.743004656714618
+        }
+      }
+    },
+    {
+      "tick_index": 55,
+      "timestamp": 3.009037494659424,
+      "pose_name": "flat_hand",
+      "session_id": "session_001",
+      "joint_rotations": {
+        "thumb_ip": {
+          "joint_index": 3,
+          "x_rotation": 0.0,
+          "y_rotation": 4.236457177678844
+        },
+        "index_pip": {
+          "joint_index": 6,
+          "x_rotation": 0.0,
+          "y_rotation": 4.730301612497939
+        },
+        "middle_pip": {
+          "joint_index": 10,
+          "x_rotation": 0.0,
+          "y_rotation": 2.76911275331787
+        },
+        "ring_pip": {
+          "joint_index": 14,
+          "x_rotation": 0.0,
+          "y_rotation": 7.757715349378529
+        },
+        "pinky_pip": {
+          "joint_index": 18,
+          "x_rotation": 0.0,
+          "y_rotation": 7.2531583120969
+        }
+      }
+    }
+  ]
+}
