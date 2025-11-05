@@ -117,7 +117,7 @@ class FlexToRotationInference:
                 self.voltage_to_angle(values[4])   # Pinky
             ]
 
-            imu_quat = [float(values[5]), float(values[6]), float(values[7]), float(values[8])]
+            imu_quat = [float(values[6]), float(values[5]), float(values[7]), float(values[8])]
             
             return np.array(flex_angles), imu_quat
         
@@ -170,7 +170,7 @@ class FlexToRotationInference:
                 "thumb": {
                     "metacarpal": {
                         "position": [0, 0, 0],
-                        "rotation": self.euler_to_quaternion(21.194, 43.526, -69.284)
+                        "rotation": self.euler_to_quaternion(21.194, -43.526, -69.284)
 
                     },
                     "proximal": {
@@ -179,7 +179,7 @@ class FlexToRotationInference:
                     },
                     "intermediate": {  # Joint 3
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": angle_to_quat_x(-1*thumb_y)
                     },
                     "distal": {
                         "position": [0, 0, 0],
@@ -193,7 +193,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 6
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": angle_to_quat_x(index_y)
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -211,7 +211,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 10
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": angle_to_quat_x(middle_y)
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -229,7 +229,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 14
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": angle_to_quat_x(ring_y)
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -247,7 +247,7 @@ class FlexToRotationInference:
                     },
                     "proximal": {  # Joint 18
                         "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
+                        "rotation": angle_to_quat_x(pinky_y)
                     },
                     "intermediate": {
                         "position": [0, 0, 0],
@@ -272,7 +272,7 @@ class FlexToRotationInference:
             
             packet = {
                 "timestamp": time.time(),
-                "hand": "left",
+                "hand": "right",
                 "wrist": {
                     "position": [0, 0, 0],
                     "rotation": get_rot(0)  # Joint 0
@@ -410,6 +410,8 @@ class FlexToRotationInference:
             packet_json = json.dumps(packet)
             self.sock.sendto(packet_json.encode('utf-8'), self.unity_address)
             self.frame_count += 1
+            # if self.frame_count % 10 == 0:
+            #     print(f"{packet_json}")
         except Exception as e:
             print(f"Error sending to Unity: {e}")
     
