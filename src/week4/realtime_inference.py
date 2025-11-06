@@ -1,10 +1,11 @@
 """
-Real-Time Inference V3 - Fixed IMU orientation, updated pose templates, optimized performance
-Changes from V2:
-- IMU quaternion correction for proper hand orientation
-- Updated pose templates based on actual sensor data
-- Relaxed classification threshold
-- Performance optimizations (reduced overhead)
+Real-Time Inference V4 FINAL - Per-finger bend ratios + correct templates
+Fixes:
+- Removed model inversion (was incorrect)
+- Per-finger hierarchical ratios (index/middle bend more)
+- Correct pose templates based on actual ML predictions
+- IMU correction
+- Performance optimizations
 """
 
 import asyncio
@@ -29,27 +30,57 @@ UNITY_PORT = 5555
 FLEX_MIN_VOLTAGE = 0.55
 FLEX_MAX_VOLTAGE = 1.65
 
-# Biomechanical ratios
+# Per-finger biomechanical ratios
+# Index and middle need more aggressive bending (higher multipliers)
 FINGER_BEND_RATIOS = {
-    'metacarpal': 0.3,
-    'proximal': 1.0,
-    'intermediate': 1.5,
-    'distal': 0.5
+    'thumb': {
+        'metacarpal': 0.3,
+        'proximal': 1.0,
+        'intermediate': 1.2,  # Thumb bends moderately
+        'distal': 0.6
+    },
+    'index': {
+        'metacarpal': 2.0,
+        'proximal': 1.0,
+        'intermediate': 2.0,  # INCREASED: Index bends a lot
+        'distal': 1.0         # INCREASED: Tip curls more
+    },
+    'middle': {
+        'metacarpal': 0.8,
+        'proximal': 1.0,
+        'intermediate': 2.0,  # INCREASED: Middle bends a lot
+        'distal': 1.0         # INCREASED: Tip curls more
+    },
+    'ring': {
+        'metacarpal': 0.8,
+        'proximal': 1.0,
+        'intermediate': 1.5,  # Ring bends normally
+        'distal': 0.7
+    },
+    'pinky': {
+        'metacarpal': 0.8,
+        'proximal': 1.0,
+        'intermediate': 1.5,  # Pinky bends normally
+        'distal': 0.7
+    }
 }
 
-# Updated pose templates - BASED ON YOUR DIAGNOSTIC OUTPUT
-# After inversion fix, these should work:
+# CORRECT templates based on ML predictions WITHOUT inversion
+# From your diagnostic images:
+# flat_hand: [4.4, 3.6, 3.3, 5.2, 7.8]
+# fist: [38.3, 11.1, 8.5, 14.6, 12.2]
+# grab: [5.1, 34.5, 57.0, 69.7, 60.8]
 POSE_TEMPLATES = {
-    'flat_hand': [86, 86, 87, 85, 82],   # Image 1: 90-ML_predictions [90-4.4, 90-3.6, 90-3.3, 90-5.2, 90-7.8]
-    'fist': [52, 79, 82, 75, 78],        # Image 2: 90-ML_predictions [90-38, 90-11, 90-9, 90-15, 90-12]
-    'grab': [85, 56, 33, 20, 29],        # Image 3: 90-ML_predictions [90-5, 90-34, 90-57, 90-70, 90-61]
+    'flat_hand': [4, 4, 3, 5, 8],       # Nearly straight (low angles)
+    'fist': [38, 11, 9, 15, 12],        # All curled (moderate angles)
+    'grab': [5, 35, 57, 70, 61],        # Thumb straight, fingers vary
 }
 
 
 class PoseClassifier:
-    """Simple pose classifier with relaxed threshold"""
+    """Pose classifier with relaxed threshold"""
     
-    def __init__(self, templates=POSE_TEMPLATES, threshold=25):  # Increased from 25 to 35
+    def __init__(self, templates=POSE_TEMPLATES, threshold=30):
         self.templates = templates
         self.threshold = threshold
     
@@ -74,7 +105,7 @@ class PoseClassifier:
 
 
 class FlexToRotationInference:
-    """Real-time inference with all fixes"""
+    """Real-time inference with per-finger ratios"""
     
     def __init__(self, model_path):
         # Load model
@@ -129,7 +160,7 @@ class FlexToRotationInference:
         self.current_pose = 'unknown'
         self.pose_confidence = 0.0
         
-        # Pre-allocate arrays for performance
+        # Pre-allocate arrays
         self._flex_angles_buffer = np.zeros(5)
     
     def euler_to_quaternion(self, roll, pitch, yaw):
@@ -153,39 +184,32 @@ class FlexToRotationInference:
         return [qx, qy, qz, qw]
     
     def correct_imu_quaternion(self, imu_quat):
-        """Correct IMU quaternion for mounting orientation
-        
-        The IMU is mounted on the back of the hand, so we need to rotate
-        the coordinate frame to match Unity's hand orientation.
-        
-        This applies a 180° rotation around X-axis to flip the hand right-side up.
-        """
+        """Correct IMU quaternion for mounting orientation"""
         qx, qy, qz, qw = imu_quat
         
-        # 180° rotation around X-axis: multiply by [1, 0, 0, 0]
-        # q_corrected = q_rotation * q_imu
-        corrected_qx = qw    # New x
-        corrected_qy = -qz   # New y
-        corrected_qz = qy    # New z
-        corrected_qw = qx    # New w
+        # 180° rotation around X-axis
+        corrected_qx = qw
+        corrected_qy = -qz
+        corrected_qz = qy
+        corrected_qw = qx
         
         return [corrected_qx, corrected_qy, corrected_qz, corrected_qw]
     
     def voltage_to_angle(self, voltage):
-        """Convert flex voltage to bend angle (0-90 degrees)"""
+        """Convert flex voltage to bend angle"""
         voltage = np.clip(voltage, FLEX_MIN_VOLTAGE, FLEX_MAX_VOLTAGE)
         normalized = (voltage - FLEX_MIN_VOLTAGE) / (FLEX_MAX_VOLTAGE - FLEX_MIN_VOLTAGE)
         angle = 90.0 * (1.0 - normalized)
-        return angle  # Return float directly
+        return angle
     
     def parse_ble_data(self, data_string):
-        """Parse BLE data from ESP32 - optimized"""
+        """Parse BLE data from ESP32"""
         try:
             values = data_string.split(',')
             if len(values) != 15:
                 return None, None
             
-            # Parse flex voltages directly into buffer
+            # Parse flex voltages
             for i in range(5):
                 self._flex_angles_buffer[i] = self.voltage_to_angle(float(values[i]))
             
@@ -198,7 +222,7 @@ class FlexToRotationInference:
             return None, None
     
     def predict_rotations(self, flex_angles):
-        """Predict proximal joint rotations - optimized"""
+        """Predict proximal joint rotations"""
         flex_scaled = self.input_scaler.transform([flex_angles])
         flex_tensor = torch.FloatTensor(flex_scaled)
         
@@ -207,24 +231,22 @@ class FlexToRotationInference:
         
         rotations = self.output_scaler.inverse_transform(output_scaled)[0]
         
-        # FIX: Model learned inverse - invert Y-axis predictions
-        # Extract Y rotations (indices 1, 3, 5, 7, 9)
-        # for i in [1, 3, 5, 7, 9]:
-        #     rotations[i] = 90.0 - rotations[i]  # Invert: if model predicts 10°, use 80°
-        
+        # NO INVERSION - model output is correct as-is
         return rotations
     
-    def compute_hierarchical_joints(self, proximal_angle):
-        """Compute all joint angles from proximal"""
+    def compute_hierarchical_joints(self, proximal_angle, finger_name):
+        """Compute all joint angles from proximal using per-finger ratios"""
+        ratios = FINGER_BEND_RATIOS[finger_name]
+        
         return {
-            'metacarpal': proximal_angle * FINGER_BEND_RATIOS['metacarpal'],
-            'proximal': proximal_angle * FINGER_BEND_RATIOS['proximal'],
-            'intermediate': proximal_angle * FINGER_BEND_RATIOS['intermediate'],
-            'distal': proximal_angle * FINGER_BEND_RATIOS['distal']
+            'metacarpal': proximal_angle * ratios['metacarpal'],
+            'proximal': proximal_angle * ratios['proximal'],
+            'intermediate': proximal_angle * ratios['intermediate'],
+            'distal': proximal_angle * ratios['distal']
         }
     
     def build_unity_packet(self, proximal_rotations, imu_quat):
-        """Build Unity packet - optimized"""
+        """Build Unity packet with per-finger ratios"""
         
         # Convert rotation angle to quaternion around X-axis
         def angle_to_quat_x(angle_deg):
@@ -234,24 +256,24 @@ class FlexToRotationInference:
             cos_half = np.cos(half_angle)
             return [sin_half, 0.0, 0.0, cos_half]
         
-        # Extract and mirror proximal rotations
+        # Extract proximal Y rotations
         thumb_y = proximal_rotations[1]
         index_y = proximal_rotations[3]
         middle_y = proximal_rotations[5]
         ring_y = proximal_rotations[7]
         pinky_y = proximal_rotations[9]
         
-        # Compute hierarchical angles
-        thumb_joints = self.compute_hierarchical_joints(thumb_y)
-        index_joints = self.compute_hierarchical_joints(index_y)
-        middle_joints = self.compute_hierarchical_joints(middle_y)
-        ring_joints = self.compute_hierarchical_joints(ring_y)
-        pinky_joints = self.compute_hierarchical_joints(pinky_y)
+        # Compute hierarchical angles with per-finger ratios
+        thumb_joints = self.compute_hierarchical_joints(thumb_y, 'thumb')
+        index_joints = self.compute_hierarchical_joints(index_y, 'index')
+        middle_joints = self.compute_hierarchical_joints(middle_y, 'middle')
+        ring_joints = self.compute_hierarchical_joints(ring_y, 'ring')
+        pinky_joints = self.compute_hierarchical_joints(pinky_y, 'pinky')
         
         # Fixed thumb metacarpal
         thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
         
-        # Correct IMU orientation (FIX for upside-down hand)
+        # Correct IMU orientation
         corrected_wrist_quat = self.correct_imu_quaternion(imu_quat)
         
         # Build packet
@@ -260,7 +282,7 @@ class FlexToRotationInference:
             "hand": "left",
             "wrist": {
                 "position": [0, 0, 0],
-                "rotation": corrected_wrist_quat  # FIXED: Corrected quaternion
+                "rotation": corrected_wrist_quat
             },
             "thumb": {
                 "metacarpal": {
@@ -366,7 +388,7 @@ class FlexToRotationInference:
             print(f"Error sending to Unity: {e}")
     
     def notification_handler(self, sender, data):
-        """Handle BLE notifications - optimized"""
+        """Handle BLE notifications"""
         data_string = data.decode('utf-8')
         
         flex_angles, imu_quat = self.parse_ble_data(data_string)
@@ -376,7 +398,7 @@ class FlexToRotationInference:
         # Predict rotations
         rotations = self.predict_rotations(flex_angles)
         
-        # Classify pose (every 5 frames to reduce overhead)
+        # Classify pose (every 5 frames)
         if self.frame_count % 5 == 0:
             proximal_angles = [
                 rotations[1],  # Thumb Y
@@ -400,11 +422,13 @@ class FlexToRotationInference:
     async def run(self):
         """Main inference loop"""
         print(f"\n{'='*60}")
-        print("REAL-TIME INFERENCE V3")
+        print("REAL-TIME INFERENCE V4 FINAL")
         print(f"{'='*60}")
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
-        print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
-        print(f"Classification threshold: {self.pose_classifier.threshold}° RMSE")
+        print(f"\nPer-finger bend ratios:")
+        print(f"  Index/Middle intermediate: 2.0× (aggressive bending)")
+        print(f"  Thumb/Ring/Pinky intermediate: 1.2-1.5× (normal)")
+        print(f"\nPose templates: {list(POSE_TEMPLATES.keys())}")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -429,15 +453,13 @@ class FlexToRotationInference:
             print("✓ Subscribed to notifications")
             
             print("\n🚀 STREAMING TO UNITY")
-            print("⚠️  If FPS is still low, run diagnostic_v2.py to identify bottleneck")
-            print("⚠️  If poses don't classify, calibrate templates with diagnostic_v2.py")
             print("Press Ctrl+C to stop\n")
             
             self.start_time = time.time()
             
             try:
                 while True:
-                    await asyncio.sleep(0.05)  # Reduced from 0.1 for better responsiveness
+                    await asyncio.sleep(0.05)
             except KeyboardInterrupt:
                 print("\n\nStopping...")
             
@@ -453,17 +475,15 @@ async def main():
     
     if len(sys.argv) < 2:
         print("\nUsage:")
-        print("  python realtime_inference_v3.py <model_path>")
+        print("  python realtime_inference_v4_final.py <model_path>")
         print("\nExample:")
-        print("  python realtime_inference_v3.py models/flex_to_rotation_model.pth")
-        print("\nV3 Features:")
-        print("  ✓ Fixed IMU orientation (hand no longer upside down)")
-        print("  ✓ Relaxed pose classification threshold (35° RMSE)")
+        print("  python realtime_inference_v4_final.py models/flex_to_rotation_model.pth")
+        print("\nV4 Final Features:")
+        print("  ✓ Per-finger bend ratios (index/middle bend more)")
+        print("  ✓ No model inversion (was incorrect)")
+        print("  ✓ Correct pose templates")
+        print("  ✓ Fixed IMU orientation")
         print("  ✓ Performance optimizations")
-        print("\nIf issues persist:")
-        print("  1. Run diagnostic_v2.py to see actual angles")
-        print("  2. Calibrate pose templates based on diagnostic output")
-        print("  3. Adjust FLEX_MIN/MAX_VOLTAGE if angles seem off")
         sys.exit(1)
     
     model_path = sys.argv[1]
