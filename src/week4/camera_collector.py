@@ -240,11 +240,7 @@ class CameraScriptRunner:
         self.poses = [
             'flat_hand',
             'fist',
-            'pointing',
-            'thumbs_up',
-            'peace_sign',
-            'ok_sign',
-            'pinch'
+            'grab'
         ]
     
     def run_collection(self):

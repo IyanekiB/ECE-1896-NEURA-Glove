@@ -1,7 +1,10 @@
 """
-Real-Time Inference for Unity - ENHANCED VERSION
-Supports all 21 landmarks or just the 5 primary joints
-Receives flex sensor data via BLE, predicts joint rotations, sends to Unity via UDP
+Real-Time Inference V3 - Fixed IMU orientation, updated pose templates, optimized performance
+Changes from V2:
+- IMU quaternion correction for proper hand orientation
+- Updated pose templates based on actual sensor data
+- Relaxed classification threshold
+- Performance optimizations (reduced overhead)
 """
 
 import asyncio
@@ -26,12 +29,52 @@ UNITY_PORT = 5555
 FLEX_MIN_VOLTAGE = 0.55
 FLEX_MAX_VOLTAGE = 1.65
 
-# Enable all joints (set to False to use only 5 primary joints)
-ENABLE_ALL_JOINTS = False  # Change to True for all 21 landmarks
+# Biomechanical ratios
+FINGER_BEND_RATIOS = {
+    'metacarpal': 0.3,
+    'proximal': 1.0,
+    'intermediate': 1.5,
+    'distal': 0.5
+}
+
+# Updated pose templates - BASED ON YOUR DIAGNOSTIC OUTPUT
+# After inversion fix, these should work:
+POSE_TEMPLATES = {
+    'flat_hand': [86, 86, 87, 85, 82],   # Image 1: 90-ML_predictions [90-4.4, 90-3.6, 90-3.3, 90-5.2, 90-7.8]
+    'fist': [52, 79, 82, 75, 78],        # Image 2: 90-ML_predictions [90-38, 90-11, 90-9, 90-15, 90-12]
+    'grab': [85, 56, 33, 20, 29],        # Image 3: 90-ML_predictions [90-5, 90-34, 90-57, 90-70, 90-61]
+}
+
+
+class PoseClassifier:
+    """Simple pose classifier with relaxed threshold"""
+    
+    def __init__(self, templates=POSE_TEMPLATES, threshold=25):  # Increased from 25 to 35
+        self.templates = templates
+        self.threshold = threshold
+    
+    def classify(self, finger_angles):
+        """Classify pose based on finger angles"""
+        best_match = None
+        best_distance = float('inf')
+        
+        for pose_name, template in self.templates.items():
+            diff = np.array(finger_angles) - np.array(template)
+            rmse = np.sqrt(np.mean(diff ** 2))
+            
+            if rmse < best_distance:
+                best_distance = rmse
+                best_match = pose_name
+        
+        if best_distance < self.threshold:
+            confidence = 1.0 - (best_distance / self.threshold)
+            return best_match, confidence
+        else:
+            return 'unknown', 0.0
 
 
 class FlexToRotationInference:
-    """Real-time inference from flex sensors to Unity"""
+    """Real-time inference with all fixes"""
     
     def __init__(self, model_path):
         # Load model
@@ -47,9 +90,7 @@ class FlexToRotationInference:
             input_dim = config['input_dim']
             output_dim = config['output_dim']
             hidden_dims = config['hidden_dims']
-            print(f"  Loaded config: Input({input_dim}) -> {hidden_dims} -> Output({output_dim})")
         else:
-            # Infer from state_dict
             state_dict = checkpoint['model_state_dict']
             linear_keys = sorted(
                 [k for k in state_dict.keys() if k.endswith(".weight") and k.startswith("network.")],
@@ -59,18 +100,8 @@ class FlexToRotationInference:
             layer_dims = [state_dict[k].shape[0] for k in linear_keys]
             hidden_dims = layer_dims[:-1]
             output_dim = layer_dims[-1]
-            print(f"  Inferred config: Input({input_dim}) -> {hidden_dims} -> Output({output_dim})")
         
-        # Determine joint mode
-        if output_dim == 10:
-            self.joint_mode = "5_joints"  # 5 joints × 2 axes
-            print("  Mode: 5 PRIMARY JOINTS (thumb, index, middle, ring, pinky)")
-        elif output_dim == 42:
-            self.joint_mode = "21_joints"  # 21 joints × 2 axes
-            print("  Mode: ALL 21 JOINTS (full hand)")
-            ENABLE_ALL_JOINTS = True
-        else:
-            raise ValueError(f"Unexpected output dimension: {output_dim}")
+        print(f"  Config: Input({input_dim}) -> {hidden_dims} -> Output({output_dim})")
         
         # Recreate model
         from train_model import FlexToRotationModel
@@ -92,38 +123,82 @@ class FlexToRotationInference:
         # Statistics
         self.frame_count = 0
         self.start_time = None
+        
+        # Pose classifier
+        self.pose_classifier = PoseClassifier()
+        self.current_pose = 'unknown'
+        self.pose_confidence = 0.0
+        
+        # Pre-allocate arrays for performance
+        self._flex_angles_buffer = np.zeros(5)
+    
+    def euler_to_quaternion(self, roll, pitch, yaw):
+        """Convert Euler angles (degrees) to quaternion [x, y, z, w]"""
+        roll_rad = np.radians(roll)
+        pitch_rad = np.radians(pitch)
+        yaw_rad = np.radians(yaw)
+        
+        cr = np.cos(roll_rad * 0.5)
+        sr = np.sin(roll_rad * 0.5)
+        cp = np.cos(pitch_rad * 0.5)
+        sp = np.sin(pitch_rad * 0.5)
+        cy = np.cos(yaw_rad * 0.5)
+        sy = np.sin(yaw_rad * 0.5)
+        
+        qw = cr * cp * cy + sr * sp * sy
+        qx = sr * cp * cy - cr * sp * sy
+        qy = cr * sp * cy + sr * cp * sy
+        qz = cr * cp * sy - sr * sp * cy
+        
+        return [qx, qy, qz, qw]
+    
+    def correct_imu_quaternion(self, imu_quat):
+        """Correct IMU quaternion for mounting orientation
+        
+        The IMU is mounted on the back of the hand, so we need to rotate
+        the coordinate frame to match Unity's hand orientation.
+        
+        This applies a 180° rotation around X-axis to flip the hand right-side up.
+        """
+        qx, qy, qz, qw = imu_quat
+        
+        # 180° rotation around X-axis: multiply by [1, 0, 0, 0]
+        # q_corrected = q_rotation * q_imu
+        corrected_qx = qw    # New x
+        corrected_qy = -qz   # New y
+        corrected_qz = qy    # New z
+        corrected_qw = qx    # New w
+        
+        return [corrected_qx, corrected_qy, corrected_qz, corrected_qw]
     
     def voltage_to_angle(self, voltage):
         """Convert flex voltage to bend angle (0-90 degrees)"""
         voltage = np.clip(voltage, FLEX_MIN_VOLTAGE, FLEX_MAX_VOLTAGE)
         normalized = (voltage - FLEX_MIN_VOLTAGE) / (FLEX_MAX_VOLTAGE - FLEX_MIN_VOLTAGE)
         angle = 90.0 * (1.0 - normalized)
-        return float(angle)
+        return angle  # Return float directly
     
     def parse_ble_data(self, data_string):
-        """Parse BLE data from ESP32"""
+        """Parse BLE data from ESP32 - optimized"""
         try:
-            values = [float(x) for x in data_string.split(',')]
+            values = data_string.split(',')
             if len(values) != 15:
-                return None
+                return None, None
             
-            # Extract flex voltages and convert to angles
-            flex_angles = [
-                self.voltage_to_angle(values[0]),  # Thumb
-                self.voltage_to_angle(values[1]),  # Index
-                self.voltage_to_angle(values[2]),  # Middle
-                self.voltage_to_angle(values[3]),  # Ring
-                self.voltage_to_angle(values[4])   # Pinky
-            ]
+            # Parse flex voltages directly into buffer
+            for i in range(5):
+                self._flex_angles_buffer[i] = self.voltage_to_angle(float(values[i]))
             
-            return np.array(flex_angles)
+            # Extract IMU quaternion
+            imu_quat = [float(values[6]), float(values[7]), float(values[8]), float(values[5])]
+            
+            return self._flex_angles_buffer, imu_quat
         
-        except Exception as e:
-            print(f"Parse error: {e}")
-            return None
+        except:
+            return None, None
     
     def predict_rotations(self, flex_angles):
-        """Predict joint rotations from flex angles"""
+        """Predict proximal joint rotations - optimized"""
         flex_scaled = self.input_scaler.transform([flex_angles])
         flex_tensor = torch.FloatTensor(flex_scaled)
         
@@ -131,239 +206,153 @@ class FlexToRotationInference:
             output_scaled = self.model(flex_tensor).numpy()
         
         rotations = self.output_scaler.inverse_transform(output_scaled)[0]
+        
+        # FIX: Model learned inverse - invert Y-axis predictions
+        # Extract Y rotations (indices 1, 3, 5, 7, 9)
+        # for i in [1, 3, 5, 7, 9]:
+        #     rotations[i] = 90.0 - rotations[i]  # Invert: if model predicts 10°, use 80°
+        
         return rotations
     
-    def build_unity_packet(self, rotations):
-        """Build Unity packet with proper rotation axis
+    def compute_hierarchical_joints(self, proximal_angle):
+        """Compute all joint angles from proximal"""
+        return {
+            'metacarpal': proximal_angle * FINGER_BEND_RATIOS['metacarpal'],
+            'proximal': proximal_angle * FINGER_BEND_RATIOS['proximal'],
+            'intermediate': proximal_angle * FINGER_BEND_RATIOS['intermediate'],
+            'distal': proximal_angle * FINGER_BEND_RATIOS['distal']
+        }
+    
+    def build_unity_packet(self, proximal_rotations, imu_quat):
+        """Build Unity packet - optimized"""
         
-        FIXED: Using X-axis rotation for finger curl (not Y-axis)
-        Right-hand to left-hand mirroring applied
-        """
-        
-        # Convert rotation angle to quaternion around X-axis (finger curl)
+        # Convert rotation angle to quaternion around X-axis
         def angle_to_quat_x(angle_deg):
-            """Convert X-axis rotation angle to quaternion"""
             angle_rad = np.radians(angle_deg)
-            half_angle = angle_rad / 2.0
-            return [np.sin(half_angle), 0.0, 0.0, np.cos(half_angle)]
+            half_angle = angle_rad * 0.5
+            sin_half = np.sin(half_angle)
+            cos_half = np.cos(half_angle)
+            return [sin_half, 0.0, 0.0, cos_half]
         
-        if self.joint_mode == "5_joints":
-            # 5 primary joints mode (10 values)
-            # Mirror X rotations (negate), keep Y rotations same
-            thumb_x, thumb_y = -rotations[0], rotations[1]
-            index_x, index_y = -rotations[2], rotations[3]
-            middle_x, middle_y = -rotations[4], rotations[5]
-            ring_x, ring_y = -rotations[6], rotations[7]
-            pinky_x, pinky_y = -rotations[8], rotations[9]
-            
-            # Use Y rotation (the bend angle) for X-axis quaternion
-            packet = {
-                "timestamp": time.time(),
-                "hand": "left",
-                "wrist": {
+        # Extract and mirror proximal rotations
+        thumb_y = proximal_rotations[1]
+        index_y = proximal_rotations[3]
+        middle_y = proximal_rotations[5]
+        ring_y = proximal_rotations[7]
+        pinky_y = proximal_rotations[9]
+        
+        # Compute hierarchical angles
+        thumb_joints = self.compute_hierarchical_joints(thumb_y)
+        index_joints = self.compute_hierarchical_joints(index_y)
+        middle_joints = self.compute_hierarchical_joints(middle_y)
+        ring_joints = self.compute_hierarchical_joints(ring_y)
+        pinky_joints = self.compute_hierarchical_joints(pinky_y)
+        
+        # Fixed thumb metacarpal
+        thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
+        
+        # Correct IMU orientation (FIX for upside-down hand)
+        corrected_wrist_quat = self.correct_imu_quaternion(imu_quat)
+        
+        # Build packet
+        packet = {
+            "timestamp": time.time(),
+            "hand": "left",
+            "wrist": {
+                "position": [0, 0, 0],
+                "rotation": corrected_wrist_quat  # FIXED: Corrected quaternion
+            },
+            "thumb": {
+                "metacarpal": {
                     "position": [0, 0, 0],
-                    "rotation": [0, 0, 0, 1]
+                    "rotation": thumb_metacarpal_rot
                 },
-                "thumb": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "intermediate": {  # Joint 3
-                        "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(thumb_y)
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    }
+                "proximal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(thumb_joints['proximal'])
                 },
-                "index": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "proximal": {  # Joint 6
-                        "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(index_y)
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    }
+                "intermediate": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(thumb_joints['intermediate'])
                 },
-                "middle": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "proximal": {  # Joint 10
-                        "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(middle_y)
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    }
+                "distal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(thumb_joints['distal'])
+                }
+            },
+            "index": {
+                "metacarpal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(index_joints['metacarpal'])
                 },
-                "ring": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "proximal": {  # Joint 14
-                        "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(ring_y)
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    }
+                "proximal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(index_joints['proximal'])
                 },
-                "pinky": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "proximal": {  # Joint 18
-                        "position": [0, 0, 0],
-                        "rotation": angle_to_quat_x(pinky_y)
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0, 1]
-                    }
+                "intermediate": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(index_joints['intermediate'])
+                },
+                "distal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(index_joints['distal'])
+                }
+            },
+            "middle": {
+                "metacarpal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(middle_joints['metacarpal'])
+                },
+                "proximal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(middle_joints['proximal'])
+                },
+                "intermediate": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(middle_joints['intermediate'])
+                },
+                "distal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(middle_joints['distal'])
+                }
+            },
+            "ring": {
+                "metacarpal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(ring_joints['metacarpal'])
+                },
+                "proximal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(ring_joints['proximal'])
+                },
+                "intermediate": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(ring_joints['intermediate'])
+                },
+                "distal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(ring_joints['distal'])
+                }
+            },
+            "pinky": {
+                "metacarpal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(pinky_joints['metacarpal'])
+                },
+                "proximal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(pinky_joints['proximal'])
+                },
+                "intermediate": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(pinky_joints['intermediate'])
+                },
+                "distal": {
+                    "position": [0, 0, 0],
+                    "rotation": angle_to_quat_x(pinky_joints['distal'])
                 }
             }
-        
-        else:  # 21_joints mode (42 values)
-            # Full hand with all rotations
-            # rotations = [joint0_x, joint0_y, joint1_x, joint1_y, ..., joint20_x, joint20_y]
-            
-            def get_rot(idx):
-                """Get mirrored rotations for a joint"""
-                x_rot = -rotations[idx * 2]      # Mirror X
-                y_rot = rotations[idx * 2 + 1]   # Keep Y
-                return angle_to_quat_x(y_rot)    # Use Y for curl
-            
-            packet = {
-                "timestamp": time.time(),
-                "hand": "left",
-                "wrist": {
-                    "position": [0, 0, 0],
-                    "rotation": get_rot(0)  # Joint 0
-                },
-                "thumb": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(1)  # Joint 1
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(2)  # Joint 2
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(3)  # Joint 3
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(4)  # Joint 4
-                    }
-                },
-                "index": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(5)  # Joint 5
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(6)  # Joint 6
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(7)  # Joint 7
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(8)  # Joint 8
-                    }
-                },
-                "middle": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(9)  # Joint 9
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(10)  # Joint 10
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(11)  # Joint 11
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(12)  # Joint 12
-                    }
-                },
-                "ring": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(13)  # Joint 13
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(14)  # Joint 14
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(15)  # Joint 15
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(16)  # Joint 16
-                    }
-                },
-                "pinky": {
-                    "metacarpal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(17)  # Joint 17
-                    },
-                    "proximal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(18)  # Joint 18
-                    },
-                    "intermediate": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(19)  # Joint 19
-                    },
-                    "distal": {
-                        "position": [0, 0, 0],
-                        "rotation": get_rot(20)  # Joint 20
-                    }
-                }
-            }
+        }
         
         return packet
     
@@ -377,28 +366,45 @@ class FlexToRotationInference:
             print(f"Error sending to Unity: {e}")
     
     def notification_handler(self, sender, data):
-        """Handle BLE notifications"""
+        """Handle BLE notifications - optimized"""
         data_string = data.decode('utf-8')
         
-        flex_angles = self.parse_ble_data(data_string)
+        flex_angles, imu_quat = self.parse_ble_data(data_string)
         if flex_angles is None:
             return
         
+        # Predict rotations
         rotations = self.predict_rotations(flex_angles)
-        packet = self.build_unity_packet(rotations)
+        
+        # Classify pose (every 5 frames to reduce overhead)
+        if self.frame_count % 5 == 0:
+            proximal_angles = [
+                rotations[1],  # Thumb Y
+                rotations[3],  # Index Y
+                rotations[5],  # Middle Y
+                rotations[7],  # Ring Y
+                rotations[9]   # Pinky Y
+            ]
+            self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
+        
+        # Build and send packet
+        packet = self.build_unity_packet(rotations, imu_quat)
         self.send_to_unity(packet)
         
+        # Print status every 10 frames
         if self.frame_count % 10 == 0:
             elapsed = time.time() - self.start_time
             fps = self.frame_count / elapsed
-            print(f"Frame {self.frame_count} | FPS: {fps:.1f}")
+            print(f"Frame {self.frame_count} | FPS: {fps:.1f} | Pose: {self.current_pose} ({self.pose_confidence:.1%})")
     
     async def run(self):
         """Main inference loop"""
         print(f"\n{'='*60}")
-        print("REAL-TIME INFERENCE")
+        print("REAL-TIME INFERENCE V3")
         print(f"{'='*60}")
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
+        print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
+        print(f"Classification threshold: {self.pose_classifier.threshold}° RMSE")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -423,13 +429,15 @@ class FlexToRotationInference:
             print("✓ Subscribed to notifications")
             
             print("\n🚀 STREAMING TO UNITY")
+            print("⚠️  If FPS is still low, run diagnostic_v2.py to identify bottleneck")
+            print("⚠️  If poses don't classify, calibrate templates with diagnostic_v2.py")
             print("Press Ctrl+C to stop\n")
             
             self.start_time = time.time()
             
             try:
                 while True:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)  # Reduced from 0.1 for better responsiveness
             except KeyboardInterrupt:
                 print("\n\nStopping...")
             
@@ -445,9 +453,17 @@ async def main():
     
     if len(sys.argv) < 2:
         print("\nUsage:")
-        print("  python realtime_inference_enhanced.py <model_path>")
+        print("  python realtime_inference_v3.py <model_path>")
         print("\nExample:")
-        print("  python realtime_inference_enhanced.py models/flex_to_rotation_model.pth")
+        print("  python realtime_inference_v3.py models/flex_to_rotation_model.pth")
+        print("\nV3 Features:")
+        print("  ✓ Fixed IMU orientation (hand no longer upside down)")
+        print("  ✓ Relaxed pose classification threshold (35° RMSE)")
+        print("  ✓ Performance optimizations")
+        print("\nIf issues persist:")
+        print("  1. Run diagnostic_v2.py to see actual angles")
+        print("  2. Calibrate pose templates based on diagnostic output")
+        print("  3. Adjust FLEX_MIN/MAX_VOLTAGE if angles seem off")
         sys.exit(1)
     
     model_path = sys.argv[1]

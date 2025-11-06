@@ -216,11 +216,7 @@ class PoseScriptRunner:
         self.poses = [
             'flat_hand',
             'fist',
-            'pointing',
-            'thumbs_up',
-            'peace_sign',
-            'ok_sign',
-            'pinch'
+            'grab'
         ]
     
     async def run_collection(self):
