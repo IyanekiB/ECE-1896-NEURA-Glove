@@ -1,7 +1,6 @@
 """
-BLE Flex Sensor Data Collector
-Collects flex sensor + IMU data from ESP32 via BLE
-Aligned with pose script for synchronization with MediaPipe
+BLE Flex Sensor Data Collector - Single Pose Version
+Collects flex sensor + IMU data from ESP32 via BLE for ONE pose with custom duration
 """
 
 import asyncio
@@ -115,7 +114,7 @@ class FlexDataCollector:
             self.samples.append(sample)
             self.tick_index += 1
             
-            # Print progress
+            # Print progress every 10 samples
             if self.tick_index % 10 == 0:
                 print(f"  Collected {self.tick_index} samples for {self.pose_name}...")
     
@@ -159,7 +158,7 @@ class FlexDataCollector:
                 print(f"  {i}...")
                 await asyncio.sleep(1)
             
-            print("\n🔴 COLLECTING - Hold the pose!")
+            print(f"\n🔴 COLLECTING - Hold the '{self.pose_name}' pose for {duration_seconds} seconds!")
             self.is_collecting = True
             self.start_time = time.time()
             
@@ -205,102 +204,38 @@ class FlexDataCollector:
         return filename
 
 
-class PoseScriptRunner:
-    """Run a sequence of poses with aligned collection"""
-    
-    def __init__(self, session_id, pose_duration=3):
-        self.session_id = session_id
-        self.pose_duration = pose_duration
-        
-        # Define pose sequence (same for both sensor and camera)
-        self.poses = [
-            'flat_hand',
-            'fist',
-            'grab'
-        ]
-    
-    async def run_collection(self):
-        """Run complete pose sequence"""
-        print(f"\n{'#'*60}")
-        print(f"SENSOR COLLECTION SESSION: {self.session_id}")
-        print(f"{'#'*60}")
-        print(f"\nPoses to collect: {len(self.poses)}")
-        print(f"Duration per pose: {self.pose_duration}s")
-        print(f"\nPose sequence:")
-        for i, pose in enumerate(self.poses, 1):
-            print(f"  {i}. {pose}")
-        
-        input("\nPress ENTER when ready to start...")
-        
-        results = []
-        for i, pose_name in enumerate(self.poses, 1):
-            print(f"\n\n{'='*60}")
-            print(f"POSE {i}/{len(self.poses)}: {pose_name.upper()}")
-            print(f"{'='*60}")
-            
-            # Create collector for this pose
-            collector = FlexDataCollector(pose_name, self.session_id)
-            
-            # Collect data
-            success = await collector.connect_and_collect(self.pose_duration)
-            
-            if success:
-                filename = collector.save_data()
-                results.append({
-                    'pose': pose_name,
-                    'samples': len(collector.samples),
-                    'file': filename
-                })
-            
-            # Wait between poses
-            if i < len(self.poses):
-                print(f"\n⏸  Rest for 5 seconds before next pose...")
-                await asyncio.sleep(5)
-        
-        # Save session summary
-        self._save_session_summary(results)
-        
-        print(f"\n\n{'#'*60}")
-        print(f"SESSION COMPLETE: {self.session_id}")
-        print(f"{'#'*60}")
-        print(f"Total poses collected: {len(results)}")
-        for r in results:
-            print(f"  {r['pose']}: {r['samples']} samples")
-    
-    def _save_session_summary(self, results):
-        """Save summary of collection session"""
-        summary = {
-            'session_id': self.session_id,
-            'collection_time': datetime.now().isoformat(),
-            'pose_duration': self.pose_duration,
-            'total_poses': len(results),
-            'results': results
-        }
-        
-        filename = f"data/sensor_recordings/{self.session_id}/session_summary.json"
-        with open(filename, 'w') as f:
-            json.dump(summary, f, indent=2)
-        
-        print(f"\n✓ Session summary saved: {filename}")
-
-
 async def main():
     """Main entry point"""
     import sys
     
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 4:
         print("\nUsage:")
-        print("  python ble_flex_collector.py <session_id> [pose_duration]")
+        print("  python ble_flex_collector_single.py <session_id> <pose_name> <duration_seconds>")
         print("\nExample:")
-        print("  python ble_flex_collector.py session_001 3")
-        print("\nThis will collect all poses in sequence.")
+        print("  python ble_flex_collector_single.py session_001 fist 60")
+        print("\nThis will collect 'fist' pose data for 60 seconds.")
+        print("\nCommon pose names: flat_hand, fist, grab, pointing, peace_sign, ok_sign")
         return
     
     session_id = sys.argv[1]
-    pose_duration = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+    pose_name = sys.argv[2]
+    duration_seconds = int(sys.argv[3])
     
-    runner = PoseScriptRunner(session_id, pose_duration)
-    await runner.run_collection()
+    if duration_seconds < 1 or duration_seconds > 300:
+        print("ERROR: Duration must be between 1 and 300 seconds")
+        return
+    
+    # Create collector
+    collector = FlexDataCollector(pose_name, session_id)
+    
+    # Collect data
+    success = await collector.connect_and_collect(duration_seconds)
+    
+    if success:
+        collector.save_data()
+        print("\n✓ Data collection complete!")
+    else:
+        print("\n✗ Data collection failed!")
 
 
 if __name__ == "__main__":

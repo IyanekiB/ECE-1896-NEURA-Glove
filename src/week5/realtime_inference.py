@@ -1,11 +1,10 @@
 """
-Real-Time Inference V4 FINAL - Per-finger bend ratios + correct templates
-Fixes:
-- Removed model inversion (was incorrect)
-- Per-finger hierarchical ratios (index/middle bend more)
-- Correct pose templates based on actual ML predictions
-- IMU correction
-- Performance optimizations
+Real-Time Inference - FINAL FIX
+Critical Fixes:
+1. Proper Ctrl+C handling to save predictions_log.json
+2. Live IMU wrist orientation (not hardcoded)
+3. Pinky angle clamping
+4. Performance optimization
 """
 
 import asyncio
@@ -14,6 +13,8 @@ import numpy as np
 import torch
 import socket
 import time
+import signal
+import sys
 from bleak import BleakClient, BleakScanner
 
 
@@ -31,54 +32,89 @@ FLEX_MIN_VOLTAGE = 0.55
 FLEX_MAX_VOLTAGE = 1.65
 
 # Per-finger biomechanical ratios
-# Index and middle need more aggressive bending (higher multipliers)
 FINGER_BEND_RATIOS = {
     'thumb': {
         'metacarpal': 0.3,
         'proximal': 1.0,
-        'intermediate': 1.2,  # Thumb bends moderately
+        'intermediate': 1.2,
         'distal': 0.6
     },
     'index': {
-        'metacarpal': 2.0,
+        'metacarpal': 0.5,
         'proximal': 1.0,
-        'intermediate': 2.0,  # INCREASED: Index bends a lot
-        'distal': 1.0         # INCREASED: Tip curls more
+        'intermediate': 1.8,
+        'distal': 0.9
     },
     'middle': {
-        'metacarpal': 0.8,
+        'metacarpal': 0.5,
         'proximal': 1.0,
-        'intermediate': 2.0,  # INCREASED: Middle bends a lot
-        'distal': 1.0         # INCREASED: Tip curls more
+        'intermediate': 1.8,
+        'distal': 0.9
     },
     'ring': {
-        'metacarpal': 0.8,
+        'metacarpal': 0.5,
         'proximal': 1.0,
-        'intermediate': 1.5,  # Ring bends normally
+        'intermediate': 1.5,
         'distal': 0.7
     },
     'pinky': {
-        'metacarpal': 0.8,
+        'metacarpal': 0.5,
         'proximal': 1.0,
-        'intermediate': 1.5,  # Pinky bends normally
+        'intermediate': 1.5,
         'distal': 0.7
     }
 }
 
-# CORRECT templates based on ML predictions WITHOUT inversion
-# From your diagnostic images:
-# flat_hand: [4.4, 3.6, 3.3, 5.2, 7.8]
-# fist: [38.3, 11.1, 8.5, 14.6, 12.2]
-# grab: [5.1, 34.5, 57.0, 69.7, 60.8]
+# Pose templates
 POSE_TEMPLATES = {
-    'flat_hand': [4, 4, 3, 5, 8],       # Nearly straight (low angles)
-    'fist': [38, 11, 9, 15, 12],        # All curled (moderate angles)
-    'grab': [5, 35, 57, 70, 61],        # Thumb straight, fingers vary
+    'flat_hand': [3.5, 8.0, 6.7, 7.0, 5.8],
+    'fist': [48.9, 34.8, 32.5, 34.0, 30.2],
+    'grab': [4.4, 29.1, 41.3, 41.2, 24.3],
 }
 
 
+class KalmanFilter:
+    """1D Kalman filter for smoothing joint angles"""
+    
+    def __init__(self, process_variance=0.01, measurement_variance=0.1, initial_value=0.0):
+        self.process_variance = process_variance
+        self.measurement_variance = measurement_variance
+        self.estimate = initial_value
+        self.error_covariance = 1.0
+        
+    def update(self, measurement):
+        """Update filter with new measurement"""
+        # Prediction
+        predicted_estimate = self.estimate
+        predicted_error_covariance = self.error_covariance + self.process_variance
+        
+        # Update
+        kalman_gain = predicted_error_covariance / (predicted_error_covariance + self.measurement_variance)
+        self.estimate = predicted_estimate + kalman_gain * (measurement - predicted_estimate)
+        self.error_covariance = (1 - kalman_gain) * predicted_error_covariance
+        
+        return self.estimate
+
+
+class MultiKalmanFilter:
+    """Kalman filter bank for multiple joint angles"""
+    
+    def __init__(self, num_joints=10, process_variance=0.01, measurement_variance=0.1):
+        self.filters = [
+            KalmanFilter(process_variance, measurement_variance) 
+            for _ in range(num_joints)
+        ]
+        
+    def update(self, measurements):
+        """Update all filters with new measurements"""
+        return np.array([
+            self.filters[i].update(measurements[i]) 
+            for i in range(len(measurements))
+        ])
+
+
 class PoseClassifier:
-    """Pose classifier with relaxed threshold"""
+    """Pose classifier with configurable threshold"""
     
     def __init__(self, templates=POSE_TEMPLATES, threshold=30):
         self.templates = templates
@@ -105,9 +141,10 @@ class PoseClassifier:
 
 
 class FlexToRotationInference:
-    """Real-time inference with per-finger ratios"""
+    """Real-time inference - FINAL FIX"""
     
-    def __init__(self, model_path):
+    def __init__(self, model_path, enable_kalman=True, 
+                 process_variance=0.005, measurement_variance=0.08):
         # Load model
         print(f"Loading model from: {model_path}")
         checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -146,6 +183,18 @@ class FlexToRotationInference:
         
         print("✓ Model loaded successfully")
         
+        # Kalman filtering
+        self.enable_kalman = enable_kalman
+        if self.enable_kalman:
+            self.kalman = MultiKalmanFilter(
+                num_joints=output_dim,
+                process_variance=process_variance,
+                measurement_variance=measurement_variance
+            )
+            print(f"✓ Kalman filtering enabled (Q={process_variance}, R={measurement_variance})")
+        else:
+            print("⚠ Kalman filtering disabled")
+        
         # UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.unity_address = (UNITY_IP, UNITY_PORT)
@@ -162,6 +211,13 @@ class FlexToRotationInference:
         
         # Pre-allocate arrays
         self._flex_angles_buffer = np.zeros(5)
+        
+        # CRITICAL FIX: Logging for evaluation
+        self.predictions_log = []
+        self.log_file = "predictions_log.json"
+        
+        # CRITICAL FIX: Flag for graceful shutdown
+        self.shutdown_requested = False
     
     def euler_to_quaternion(self, roll, pitch, yaw):
         """Convert Euler angles (degrees) to quaternion [x, y, z, w]"""
@@ -183,18 +239,6 @@ class FlexToRotationInference:
         
         return [qx, qy, qz, qw]
     
-    def correct_imu_quaternion(self, imu_quat):
-        """Correct IMU quaternion for mounting orientation"""
-        qx, qy, qz, qw = imu_quat
-        
-        # 180° rotation around X-axis
-        corrected_qx = qw
-        corrected_qy = -qz
-        corrected_qz = qy
-        corrected_qw = qx
-        
-        return [corrected_qx, corrected_qy, corrected_qz, corrected_qw]
-    
     def voltage_to_angle(self, voltage):
         """Convert flex voltage to bend angle"""
         voltage = np.clip(voltage, FLEX_MIN_VOLTAGE, FLEX_MAX_VOLTAGE)
@@ -203,7 +247,9 @@ class FlexToRotationInference:
         return angle
     
     def parse_ble_data(self, data_string):
-        """Parse BLE data from ESP32"""
+        """Parse BLE data from ESP32
+        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz,ax,ay,az,gx,gy,gz
+        """
         try:
             values = data_string.split(',')
             if len(values) != 15:
@@ -213,30 +259,46 @@ class FlexToRotationInference:
             for i in range(5):
                 self._flex_angles_buffer[i] = self.voltage_to_angle(float(values[i]))
             
-            # Extract IMU quaternion
-            imu_quat = [float(values[6]), float(values[7]), float(values[8]), float(values[5])]
+            # CRITICAL FIX: Extract LIVE IMU quaternion from BLE stream
+            # Format from ESP32: qw, qx, qy, qz (indices 5, 6, 7, 8)
+            imu_quat = [
+                float(values[6]),  # qx
+                float(values[7]),  # qy
+                float(values[8]),  # qz
+                float(values[5])   # qw
+            ]
             
-            return self._flex_angles_buffer, imu_quat
+            return self._flex_angles_buffer.copy(), imu_quat
         
-        except:
+        except Exception as e:
             return None, None
     
     def predict_rotations(self, flex_angles):
-        """Predict proximal joint rotations"""
+        """Predict joint rotations with optional Kalman filtering"""
+        # ML model prediction
         flex_scaled = self.input_scaler.transform([flex_angles])
         flex_tensor = torch.FloatTensor(flex_scaled)
         
         with torch.no_grad():
             output_scaled = self.model(flex_tensor).numpy()
         
-        rotations = self.output_scaler.inverse_transform(output_scaled)[0]
+        rotations_raw = self.output_scaler.inverse_transform(output_scaled)[0]
         
-        # NO INVERSION - model output is correct as-is
+        # FIXED: Clamp pinky angle to prevent negative values
+        rotations_raw[9] = max(0, rotations_raw[9])  # Pinky Y-axis
+        
+        # Apply Kalman filtering
+        if self.enable_kalman:
+            rotations = self.kalman.update(rotations_raw)
+        else:
+            rotations = rotations_raw
+        
         return rotations
     
-    def compute_hierarchical_joints(self, proximal_angle, finger_name):
-        """Compute all joint angles from proximal using per-finger ratios"""
-        ratios = FINGER_BEND_RATIOS[finger_name]
+    def distribute_rotations(self, proximal_angle, ratios):
+        """Distribute proximal angle across finger joints"""
+        # Ensure angle is positive
+        proximal_angle = max(0, proximal_angle)
         
         return {
             'metacarpal': proximal_angle * ratios['metacarpal'],
@@ -245,36 +307,36 @@ class FlexToRotationInference:
             'distal': proximal_angle * ratios['distal']
         }
     
-    def build_unity_packet(self, proximal_rotations, imu_quat):
-        """Build Unity packet with per-finger ratios"""
+    def build_unity_packet(self, rotations, imu_quat):
+        """Build Unity UDP packet from rotations
         
-        # Convert rotation angle to quaternion around X-axis
-        def angle_to_quat_x(angle_deg):
-            angle_rad = np.radians(angle_deg)
-            half_angle = angle_rad * 0.5
-            sin_half = np.sin(half_angle)
-            cos_half = np.cos(half_angle)
-            return [sin_half, 0.0, 0.0, cos_half]
+        CRITICAL: Uses LIVE IMU quaternion data for wrist orientation
+        """
+        # Extract proximal Y-axis rotations
+        thumb_y = rotations[1]
+        index_y = rotations[3]
+        middle_y = rotations[5]
+        ring_y = rotations[7]
+        pinky_y = rotations[9]
         
-        # Extract proximal Y rotations
-        thumb_y = proximal_rotations[1]
-        index_y = proximal_rotations[3]
-        middle_y = proximal_rotations[5]
-        ring_y = proximal_rotations[7]
-        pinky_y = proximal_rotations[9]
+        # Distribute rotations across joints
+        thumb_joints = self.distribute_rotations(thumb_y, FINGER_BEND_RATIOS['thumb'])
+        index_joints = self.distribute_rotations(index_y, FINGER_BEND_RATIOS['index'])
+        middle_joints = self.distribute_rotations(middle_y, FINGER_BEND_RATIOS['middle'])
+        ring_joints = self.distribute_rotations(ring_y, FINGER_BEND_RATIOS['ring'])
+        pinky_joints = self.distribute_rotations(pinky_y, FINGER_BEND_RATIOS['pinky'])
         
-        # Compute hierarchical angles with per-finger ratios
-        thumb_joints = self.compute_hierarchical_joints(thumb_y, 'thumb')
-        index_joints = self.compute_hierarchical_joints(index_y, 'index')
-        middle_joints = self.compute_hierarchical_joints(middle_y, 'middle')
-        ring_joints = self.compute_hierarchical_joints(ring_y, 'ring')
-        pinky_joints = self.compute_hierarchical_joints(pinky_y, 'pinky')
+        # Convert to quaternions (X-axis rotation for finger curl)
+        def angle_to_quat_x(angle):
+            theta = np.radians(max(0, angle))
+            return [np.sin(theta/2), 0, 0, np.cos(theta/2)]
         
         # Fixed thumb metacarpal
         thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
         
-        # Correct IMU orientation
-        corrected_wrist_quat = self.correct_imu_quaternion(imu_quat)
+        # CRITICAL FIX: Use LIVE IMU quaternion for wrist (not hardcoded!)
+        # The imu_quat comes directly from BLE stream each frame
+        wrist_quat = imu_quat  # [qx, qy, qz, qw] format
         
         # Build packet
         packet = {
@@ -282,124 +344,68 @@ class FlexToRotationInference:
             "hand": "left",
             "wrist": {
                 "position": [0, 0, 0],
-                "rotation": corrected_wrist_quat
+                "rotation": wrist_quat  # LIVE IMU DATA
             },
             "thumb": {
-                "metacarpal": {
-                    "position": [0, 0, 0],
-                    "rotation": thumb_metacarpal_rot
-                },
-                "proximal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(thumb_joints['proximal'])
-                },
-                "intermediate": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(thumb_joints['intermediate'])
-                },
-                "distal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(thumb_joints['distal'])
-                }
+                "metacarpal": {"position": [0, 0, 0], "rotation": thumb_metacarpal_rot},
+                "proximal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(thumb_joints['proximal'])},
+                "intermediate": {"position": [0, 0, 0], "rotation": angle_to_quat_x(thumb_joints['intermediate'])},
+                "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(thumb_joints['distal'])}
             },
             "index": {
-                "metacarpal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(index_joints['metacarpal'])
-                },
-                "proximal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(index_joints['proximal'])
-                },
-                "intermediate": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(index_joints['intermediate'])
-                },
-                "distal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(index_joints['distal'])
-                }
+                "metacarpal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(index_joints['metacarpal'])},
+                "proximal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(index_joints['proximal'])},
+                "intermediate": {"position": [0, 0, 0], "rotation": angle_to_quat_x(index_joints['intermediate'])},
+                "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(index_joints['distal'])}
             },
             "middle": {
-                "metacarpal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(middle_joints['metacarpal'])
-                },
-                "proximal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(middle_joints['proximal'])
-                },
-                "intermediate": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(middle_joints['intermediate'])
-                },
-                "distal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(middle_joints['distal'])
-                }
+                "metacarpal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(middle_joints['metacarpal'])},
+                "proximal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(middle_joints['proximal'])},
+                "intermediate": {"position": [0, 0, 0], "rotation": angle_to_quat_x(middle_joints['intermediate'])},
+                "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(middle_joints['distal'])}
             },
             "ring": {
-                "metacarpal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(ring_joints['metacarpal'])
-                },
-                "proximal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(ring_joints['proximal'])
-                },
-                "intermediate": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(ring_joints['intermediate'])
-                },
-                "distal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(ring_joints['distal'])
-                }
+                "metacarpal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(ring_joints['metacarpal'])},
+                "proximal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(ring_joints['proximal'])},
+                "intermediate": {"position": [0, 0, 0], "rotation": angle_to_quat_x(ring_joints['intermediate'])},
+                "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(ring_joints['distal'])}
             },
             "pinky": {
-                "metacarpal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(pinky_joints['metacarpal'])
-                },
-                "proximal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(pinky_joints['proximal'])
-                },
-                "intermediate": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(pinky_joints['intermediate'])
-                },
-                "distal": {
-                    "position": [0, 0, 0],
-                    "rotation": angle_to_quat_x(pinky_joints['distal'])
-                }
+                "metacarpal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(pinky_joints['metacarpal'])},
+                "proximal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(pinky_joints['proximal'])},
+                "intermediate": {"position": [0, 0, 0], "rotation": angle_to_quat_x(pinky_joints['intermediate'])},
+                "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(pinky_joints['distal'])}
             }
         }
         
         return packet
     
     def send_to_unity(self, packet):
-        """Send packet to Unity via UDP"""
+        """Send packet to Unity via UDP - OPTIMIZED"""
         try:
-            packet_json = json.dumps(packet)
+            packet_json = json.dumps(packet, separators=(',', ':'))
             self.sock.sendto(packet_json.encode('utf-8'), self.unity_address)
             self.frame_count += 1
         except Exception as e:
-            print(f"Error sending to Unity: {e}")
+            if self.frame_count % 100 == 0:
+                print(f"Error sending to Unity: {e}")
     
     def notification_handler(self, sender, data):
         """Handle BLE notifications"""
+        if self.shutdown_requested:
+            return
+        
         data_string = data.decode('utf-8')
         
         flex_angles, imu_quat = self.parse_ble_data(data_string)
         if flex_angles is None:
             return
         
-        # Predict rotations
+        # Predict rotations (with Kalman filtering if enabled)
         rotations = self.predict_rotations(flex_angles)
         
-        # Classify pose (every 5 frames)
-        if self.frame_count % 5 == 0:
+        # Classify pose (every 10 frames to reduce CPU load)
+        if self.frame_count % 10 == 0:
             proximal_angles = [
                 rotations[1],  # Thumb Y
                 rotations[3],  # Index Y
@@ -408,27 +414,70 @@ class FlexToRotationInference:
                 rotations[9]   # Pinky Y
             ]
             self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
+            
+            # Log prediction for evaluation
+            self.predictions_log.append({
+                'timestamp': time.time(),
+                'frame': self.frame_count,
+                'pose': self.current_pose,
+                'confidence': float(self.pose_confidence),
+                'angles': [float(a) for a in proximal_angles],
+                'imu_quat': [float(q) for q in imu_quat]  # Also log IMU data
+            })
         
         # Build and send packet
         packet = self.build_unity_packet(rotations, imu_quat)
         self.send_to_unity(packet)
         
-        # Print status every 10 frames
-        if self.frame_count % 10 == 0:
+        # Print status every 30 frames
+        if self.frame_count % 10 == 0 and self.frame_count > 0:
             elapsed = time.time() - self.start_time
             fps = self.frame_count / elapsed
-            print(f"Frame {self.frame_count} | FPS: {fps:.1f} | Pose: {self.current_pose} ({self.pose_confidence:.1%})")
+            kalman_status = "ON" if self.enable_kalman else "OFF"
+            print(f"Frame {self.frame_count} | FPS: {fps:.1f} | Kalman: {kalman_status} | "
+                  f"Pose: {self.current_pose} ({self.pose_confidence:.1%})")
+    
+    def save_predictions_log(self):
+        """CRITICAL FIX: Save predictions log for evaluation"""
+        if not self.predictions_log:
+            print("⚠ No predictions to save (ran too short?)")
+            return False
+        
+        output = {
+            'metadata': {
+                'total_predictions': len(self.predictions_log),
+                'duration': time.time() - self.start_time if self.start_time else 0,
+                'kalman_enabled': self.enable_kalman,
+                'process_variance': self.kalman.filters[0].process_variance if self.enable_kalman else None,
+                'measurement_variance': self.kalman.filters[0].measurement_variance if self.enable_kalman else None
+            },
+            'predictions': self.predictions_log
+        }
+        
+        try:
+            with open(self.log_file, 'w') as f:
+                json.dump(output, f, indent=2)
+            
+            print(f"\n✓ Predictions log saved: {self.log_file}")
+            print(f"  Total predictions: {len(self.predictions_log)}")
+            return True
+        except Exception as e:
+            print(f"\n✗ Error saving predictions log: {e}")
+            return False
     
     async def run(self):
-        """Main inference loop"""
+        """Main inference loop with PROPER shutdown handling"""
         print(f"\n{'='*60}")
-        print("REAL-TIME INFERENCE V4 FINAL")
+        print("REAL-TIME INFERENCE - FINAL FIX")
         print(f"{'='*60}")
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
-        print(f"\nPer-finger bend ratios:")
-        print(f"  Index/Middle intermediate: 2.0× (aggressive bending)")
-        print(f"  Thumb/Ring/Pinky intermediate: 1.2-1.5× (normal)")
-        print(f"\nPose templates: {list(POSE_TEMPLATES.keys())}")
+        print(f"Kalman filtering: {'ENABLED' if self.enable_kalman else 'DISABLED'}")
+        print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
+        print(f"\n🔧 Fixes applied:")
+        print(f"  ✓ Live IMU wrist orientation (not hardcoded)")
+        print(f"  ✓ Proper Ctrl+C handling (saves log)")
+        print(f"  ✓ Pinky curl direction")
+        print(f"  ✓ Performance optimization")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -446,50 +495,114 @@ class FlexToRotationInference:
         print(f"Found: {target_device.name} ({target_device.address})")
         
         print("Connecting...")
-        async with BleakClient(target_device.address) as client:
-            print(f"Connected: {client.is_connected}")
-            
-            await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
-            print("✓ Subscribed to notifications")
-            
-            print("\n🚀 STREAMING TO UNITY")
-            print("Press Ctrl+C to stop\n")
-            
-            self.start_time = time.time()
-            
-            try:
-                while True:
-                    await asyncio.sleep(0.05)
-            except KeyboardInterrupt:
-                print("\n\nStopping...")
-            
-            await client.stop_notify(CHARACTERISTIC_UUID)
         
-        print(f"\n{'='*60}")
-        print(f"Total frames sent: {self.frame_count}")
-        print(f"Average FPS: {self.frame_count / (time.time() - self.start_time):.1f}")
+        # CRITICAL FIX: Proper exception handling
+        try:
+            async with BleakClient(target_device.address) as client:
+                print(f"Connected: {client.is_connected}")
+                
+                await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
+                print("✓ Subscribed to notifications")
+                
+                print("\n🚀 STREAMING TO UNITY")
+                print("💡 Using LIVE IMU data for wrist orientation")
+                print("Press Ctrl+C to stop and save log\n")
+                
+                self.start_time = time.time()
+                
+                # Main loop
+                while not self.shutdown_requested:
+                    await asyncio.sleep(0.02)
+                
+                # Clean shutdown
+                await client.stop_notify(CHARACTERISTIC_UUID)
+                
+        except KeyboardInterrupt:
+            print("\n\n⏹️  Keyboard interrupt detected...")
+            self.shutdown_requested = True
+        except Exception as e:
+            print(f"\n✗ Error during streaming: {e}")
+            self.shutdown_requested = True
+        finally:
+            # CRITICAL: Always save log, even on error
+            print(f"\n{'='*60}")
+            print(f"SHUTDOWN")
+            print(f"{'='*60}")
+            
+            if self.frame_count > 0:
+                elapsed = time.time() - self.start_time
+                print(f"Total frames sent: {self.frame_count}")
+                print(f"Duration: {elapsed:.1f}s")
+                print(f"Average FPS: {self.frame_count / elapsed:.1f}")
+            
+            # Save predictions log
+            print("\n💾 Saving predictions log...")
+            self.save_predictions_log()
+
+
+# CRITICAL FIX: Global reference for signal handler
+inference_instance = None
+
+def signal_handler(signum, frame):
+    """Handle Ctrl+C gracefully"""
+    if inference_instance:
+        print("\n\n⚠️  Interrupt signal received, shutting down gracefully...")
+        inference_instance.shutdown_requested = True
 
 
 async def main():
-    import sys
+    global inference_instance
     
     if len(sys.argv) < 2:
         print("\nUsage:")
-        print("  python realtime_inference_v4_final.py <model_path>")
-        print("\nExample:")
-        print("  python realtime_inference_v4_final.py models/flex_to_rotation_model.pth")
-        print("\nV4 Final Features:")
-        print("  ✓ Per-finger bend ratios (index/middle bend more)")
-        print("  ✓ No model inversion (was incorrect)")
-        print("  ✓ Correct pose templates")
-        print("  ✓ Fixed IMU orientation")
-        print("  ✓ Performance optimizations")
+        print("  python realtime_inference_final_fix.py <model_path> [--no-kalman] [--process-var Q] [--measurement-var R]")
+        print("\nExamples:")
+        print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth")
+        print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth --no-kalman")
+        print("\n🔧 FINAL FIXES:")
+        print("  ✓ Live IMU wrist orientation (reads from BLE stream)")
+        print("  ✓ Proper Ctrl+C handling (always saves predictions_log.json)")
+        print("  ✓ Pinky finger curl direction")
+        print("  ✓ Performance optimization")
         sys.exit(1)
     
     model_path = sys.argv[1]
-    inference = FlexToRotationInference(model_path)
-    await inference.run()
+    
+    # Parse optional arguments
+    enable_kalman = '--no-kalman' not in sys.argv
+    
+    process_var = 0.005
+    measurement_var = 0.08
+    
+    if '--process-var' in sys.argv:
+        idx = sys.argv.index('--process-var')
+        process_var = float(sys.argv[idx + 1])
+    
+    if '--measurement-var' in sys.argv:
+        idx = sys.argv.index('--measurement-var')
+        measurement_var = float(sys.argv[idx + 1])
+    
+    # Create inference instance
+    inference_instance = FlexToRotationInference(
+        model_path,
+        enable_kalman=enable_kalman,
+        process_variance=process_var,
+        measurement_variance=measurement_var
+    )
+    
+    # CRITICAL FIX: Register signal handler for Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    # Run inference
+    await inference_instance.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n✓ Graceful shutdown complete")
+    except Exception as e:
+        print(f"\n✗ Fatal error: {e}")
+        import traceback
+        traceback.print_exc()

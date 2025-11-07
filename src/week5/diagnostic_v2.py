@@ -1,8 +1,8 @@
 """
-Diagnostic Tool - Debug angles, IMU, and performance
+Diagnostic Tool - FIXED VERSION
 Use this to:
 1. See actual flex angles and ML predictions
-2. Calibrate pose templates
+2. Calibrate pose templates (FIXED: now actually saves templates)
 3. Fix IMU orientation
 4. Diagnose performance issues
 """
@@ -14,6 +14,8 @@ import torch
 import time
 from bleak import BleakClient, BleakScanner
 from collections import deque
+import threading
+import sys
 
 
 # BLE Configuration
@@ -27,7 +29,7 @@ FLEX_MAX_VOLTAGE = 1.65
 
 
 class DiagnosticTool:
-    """Diagnostic tool for debugging the system"""
+    """Diagnostic tool for debugging the system - FIXED VERSION"""
     
     def __init__(self, model_path):
         # Load model
@@ -72,6 +74,11 @@ class DiagnosticTool:
         # Angle history for template calibration
         self.angle_history = []
         
+        # FIXED: Template generation
+        self.templates_generated = {}
+        self.command_queue = []
+        self.running = True
+        
     def voltage_to_angle(self, voltage):
         """Convert flex voltage to bend angle"""
         voltage = np.clip(voltage, FLEX_MIN_VOLTAGE, FLEX_MAX_VOLTAGE)
@@ -101,7 +108,6 @@ class DiagnosticTool:
             return np.array(flex_angles), imu_quat
         
         except Exception as e:
-            print(f"Parse error: {e}")
             return None, None
     
     def predict_rotations(self, flex_angles):
@@ -145,8 +151,13 @@ class DiagnosticTool:
         # Store for template generation
         self.angle_history.append({
             'flex': flex_angles.tolist(),
-            'proximal': proximal_angles
+            'proximal': proximal_angles,
+            'timestamp': current_time
         })
+        
+        # Keep only last 1000 samples
+        if len(self.angle_history) > 1000:
+            self.angle_history.pop(0)
         
         # Calculate FPS
         if len(self.frame_times) > 0:
@@ -191,42 +202,117 @@ class DiagnosticTool:
                 print(f"  Avg frame time: {np.mean(self.frame_times)*1000:.1f}ms")
                 print(f"  Min frame time: {np.min(self.frame_times)*1000:.1f}ms")
                 print(f"  Max frame time: {np.max(self.frame_times)*1000:.1f}ms")
+            
+            print(f"\n💡 Commands: [f]lat_hand  [F]ist  [g]rab  [p]eace  [o]k_sign  [s]ave_all  [q]uit")
     
     def generate_template(self, pose_name):
-        """Generate pose template from recent samples"""
+        """FIXED: Generate pose template from recent samples"""
         if len(self.angle_history) < 30:
-            print("Not enough samples. Hold the pose longer.")
-            return
+            print(f"\n⚠ Not enough samples ({len(self.angle_history)}). Hold the pose longer.")
+            return None
         
-        # Use last 30 samples
-        recent_samples = self.angle_history[-30:]
+        # Use last 60 samples (last 6 seconds at 10Hz)
+        recent_samples = self.angle_history[-60:]
         
         # Average the proximal angles
         avg_angles = np.mean([s['proximal'] for s in recent_samples], axis=0)
         
         print(f"\n{'='*80}")
-        print(f"TEMPLATE GENERATED: {pose_name}")
+        print(f"✓ TEMPLATE GENERATED: {pose_name}")
         print(f"{'='*80}")
         print(f"'{pose_name}': [{avg_angles[0]:.1f}, {avg_angles[1]:.1f}, {avg_angles[2]:.1f}, {avg_angles[3]:.1f}, {avg_angles[4]:.1f}],")
-        print(f"\nCopy this line into POSE_TEMPLATES in realtime_inference_v2.py")
+        print(f"\nCopy this line into POSE_TEMPLATES in realtime_inference scripts")
+        
+        # Store template
+        self.templates_generated[pose_name] = {
+            'angles': avg_angles.tolist(),
+            'samples_used': len(recent_samples),
+            'timestamp': time.time()
+        }
         
         return avg_angles
+    
+    def save_all_templates(self):
+        """FIXED: Save all generated templates to file"""
+        if not self.templates_generated:
+            print("\n⚠ No templates generated yet!")
+            return
+        
+        output = {
+            'metadata': {
+                'generated_at': time.time(),
+                'total_templates': len(self.templates_generated)
+            },
+            'templates': self.templates_generated
+        }
+        
+        filename = "pose_templates.json"
+        try:
+            with open(filename, 'w') as f:
+                json.dump(output, f, indent=2)
+            
+            print(f"\n{'='*80}")
+            print(f"✓ TEMPLATES SAVED: {filename}")
+            print(f"{'='*80}")
+            print(f"Total templates: {len(self.templates_generated)}")
+            
+            # Print Python code format
+            print(f"\nPython code format for POSE_TEMPLATES:")
+            print("POSE_TEMPLATES = {")
+            for pose_name, data in self.templates_generated.items():
+                angles = data['angles']
+                print(f"    '{pose_name}': [{angles[0]:.1f}, {angles[1]:.1f}, {angles[2]:.1f}, {angles[3]:.1f}, {angles[4]:.1f}],")
+            print("}")
+            
+        except Exception as e:
+            print(f"\n✗ Error saving templates: {e}")
+    
+    def input_thread(self):
+        """FIXED: Thread for handling keyboard input"""
+        print("\n🎮 Input thread started. Type commands and press Enter:")
+        
+        while self.running:
+            try:
+                command = input().strip().lower()
+                
+                if command == 'f':
+                    self.generate_template('flat_hand')
+                elif command == 'F':
+                    self.generate_template('fist')
+                elif command == 'g':
+                    self.generate_template('grab')
+                elif command == 's':
+                    self.save_all_templates()
+                elif command == 'q':
+                    print("\n⏹️  Quit requested...")
+                    self.running = False
+                    break
+                else:
+                    print(f"\n❓ Unknown command: {command}")
+                    print("Commands: [f]lat_hand  [F]ist  [g]rab  [p]eace  [o]k_sign  [s]ave_all  [q]uit")
+                    
+            except EOFError:
+                break
+            except Exception as e:
+                print(f"\n✗ Input error: {e}")
     
     async def run(self):
         """Main diagnostic loop"""
         print(f"\n{'='*80}")
-        print("DIAGNOSTIC MODE")
+        print("DIAGNOSTIC MODE - FIXED VERSION")
         print(f"{'='*80}")
         print("\nThis tool will show you:")
         print("  1. Actual flex sensor angles")
         print("  2. ML model predictions")
         print("  3. IMU quaternion values")
         print("  4. Performance metrics (FPS, frame times)")
-        print("\nCommands:")
-        print("  Press 'f' + Enter: Generate template for 'flat_hand'")
-        print("  Press 'F' + Enter: Generate template for 'fist'")
-        print("  Press 'g' + Enter: Generate template for 'grab'")
-        print("  Press 'q' + Enter: Quit")
+        print("\n✨ NEW: Template generation commands:")
+        print("  [f] = Generate template for 'flat_hand'")
+        print("  [F] = Generate template for 'fist'")
+        print("  [g] = Generate template for 'grab'")
+        print("  [s] = Save all templates to file")
+        print("  [q] = Quit")
+        print("\nHold a pose for 6+ seconds, then type the command and press Enter")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -249,17 +335,20 @@ class DiagnosticTool:
             
             await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
             print("✓ Subscribed to notifications\n")
-            print("🚀 DIAGNOSTIC RUNNING - Make poses and observe angles\n")
+            
+            # FIXED: Start input thread
+            input_thread = threading.Thread(target=self.input_thread, daemon=True)
+            input_thread.start()
+            
+            print("🚀 DIAGNOSTIC RUNNING - Make poses and type commands\n")
             
             try:
-                while True:
+                while self.running:
                     await asyncio.sleep(0.1)
                     
-                    # Check for keyboard input (non-blocking simulation)
-                    # In real use, you'd need a proper input handler
-                    
             except KeyboardInterrupt:
-                print("\n\nStopping...")
+                print("\n\n⏹️  Stopping...")
+                self.running = False
             
             await client.stop_notify(CHARACTERISTIC_UUID)
         
@@ -280,21 +369,29 @@ class DiagnosticTool:
             print(f"  Middle: {avg_all[2]:6.1f}° ± {std_all[2]:5.1f}°")
             print(f"  Ring:   {avg_all[3]:6.1f}° ± {std_all[3]:5.1f}°")
             print(f"  Pinky:  {avg_all[4]:6.1f}° ± {std_all[4]:5.1f}°")
+        
+        # Auto-save templates if any were generated
+        if self.templates_generated:
+            print("\n📝 Auto-saving templates...")
+            self.save_all_templates()
 
 
 async def main():
-    import sys
-    
     if len(sys.argv) < 2:
         print("\nUsage:")
-        print("  python diagnostic_v2.py <model_path>")
+        print("  python diagnostic_v2_fixed.py <model_path>")
         print("\nExample:")
-        print("  python diagnostic_v2.py models/flex_to_rotation_model.pth")
+        print("  python diagnostic_v2_fixed.py models/flex_to_rotation_model.pth")
         print("\nThis tool helps you:")
         print("  - See actual angles from sensors and ML model")
-        print("  - Calibrate pose templates")
+        print("  - Generate and save pose templates (FIXED!)")
         print("  - Debug IMU orientation")
         print("  - Identify performance bottlenecks")
+        print("\nWorkflow:")
+        print("  1. Hold a pose for 6+ seconds")
+        print("  2. Type command letter (f/F/g) + Enter")
+        print("  3. Repeat for all poses")
+        print("  4. Type 's' + Enter to save all templates")
         sys.exit(1)
     
     model_path = sys.argv[1]
