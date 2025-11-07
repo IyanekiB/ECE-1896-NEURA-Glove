@@ -31,37 +31,37 @@ UNITY_PORT = 5555
 FLEX_MIN_VOLTAGE = 0.55
 FLEX_MAX_VOLTAGE = 1.65
 
-# Per-finger biomechanical ratios
+# OPTIMIZED: More aggressive bend ratios for realistic fist
 FINGER_BEND_RATIOS = {
     'thumb': {
-        'metacarpal': 0.3,
-        'proximal': 1.0,
-        'intermediate': 1.2,
-        'distal': 0.6
+        'metacarpal': 0.4,   # Increased from 0.3
+        'proximal': 1.2,     # Increased from 1.0
+        'intermediate': 1.5, # Increased from 1.2
+        'distal': 0.8        # Increased from 0.6
     },
     'index': {
-        'metacarpal': 0.5,
-        'proximal': 1.0,
-        'intermediate': 1.8,
-        'distal': 0.9
+        'metacarpal': 0.7,   # Increased from 0.5
+        'proximal': 1.3,     # Increased from 1.0
+        'intermediate': 2.2, # Increased from 1.8
+        'distal': 1.2        # Increased from 0.9
     },
     'middle': {
-        'metacarpal': 0.5,
-        'proximal': 1.0,
-        'intermediate': 1.8,
-        'distal': 0.9
+        'metacarpal': 0.7,   # Increased from 0.5
+        'proximal': 1.3,     # Increased from 1.0
+        'intermediate': 2.2, # Increased from 1.8
+        'distal': 1.2        # Increased from 0.9
     },
     'ring': {
-        'metacarpal': 0.5,
-        'proximal': 1.0,
-        'intermediate': 1.5,
-        'distal': 0.7
+        'metacarpal': 0.7,   # Increased from 0.5
+        'proximal': 1.3,     # Increased from 1.0
+        'intermediate': 1.8, # Increased from 1.5
+        'distal': 1.0        # Increased from 0.7
     },
     'pinky': {
-        'metacarpal': 0.5,
-        'proximal': 1.0,
-        'intermediate': 1.5,
-        'distal': 0.7
+        'metacarpal': 0.7,   # Increased from 0.5
+        'proximal': 1.3,     # Increased from 1.0
+        'intermediate': 1.8, # Increased from 1.5
+        'distal': 1.0        # Increased from 0.7
     }
 }
 
