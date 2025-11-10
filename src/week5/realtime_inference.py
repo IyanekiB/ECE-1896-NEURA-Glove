@@ -440,7 +440,7 @@ class FlexToRotationInference:
     def save_predictions_log(self):
         """CRITICAL FIX: Save predictions log for evaluation"""
         if not self.predictions_log:
-            print("⚠ No predictions to save (ran too short?)")
+            print("No predictions to save (ran too short?)")
             return False
         
         output = {
@@ -458,7 +458,7 @@ class FlexToRotationInference:
             with open(self.log_file, 'w') as f:
                 json.dump(output, f, indent=2)
             
-            print(f"\n✓ Predictions log saved: {self.log_file}")
+            print(f"\nPredictions log saved: {self.log_file}")
             print(f"  Total predictions: {len(self.predictions_log)}")
             return True
         except Exception as e:
@@ -473,11 +473,11 @@ class FlexToRotationInference:
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
         print(f"Kalman filtering: {'ENABLED' if self.enable_kalman else 'DISABLED'}")
         print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
-        print(f"\n🔧 Fixes applied:")
-        print(f"  ✓ Live IMU wrist orientation (not hardcoded)")
-        print(f"  ✓ Proper Ctrl+C handling (saves log)")
-        print(f"  ✓ Pinky curl direction")
-        print(f"  ✓ Performance optimization")
+        print(f"\nFixes applied:")
+        print(f"  Live IMU wrist orientation (not hardcoded)")
+        print(f"  Proper Ctrl+C handling (saves log)")
+        print(f"  Pinky curl direction")
+        print(f"  Performance optimization")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -504,8 +504,8 @@ class FlexToRotationInference:
                 await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
                 print("✓ Subscribed to notifications")
                 
-                print("\n🚀 STREAMING TO UNITY")
-                print("💡 Using LIVE IMU data for wrist orientation")
+                print("\nSTREAMING TO UNITY")
+                print("Using LIVE IMU data for wrist orientation")
                 print("Press Ctrl+C to stop and save log\n")
                 
                 self.start_time = time.time()
@@ -518,7 +518,7 @@ class FlexToRotationInference:
                 await client.stop_notify(CHARACTERISTIC_UUID)
                 
         except KeyboardInterrupt:
-            print("\n\n⏹️  Keyboard interrupt detected...")
+            print("\n\nKeyboard interrupt detected...")
             self.shutdown_requested = True
         except Exception as e:
             print(f"\n✗ Error during streaming: {e}")
@@ -536,7 +536,7 @@ class FlexToRotationInference:
                 print(f"Average FPS: {self.frame_count / elapsed:.1f}")
             
             # Save predictions log
-            print("\n💾 Saving predictions log...")
+            print("\nSaving predictions log...")
             self.save_predictions_log()
 
 
@@ -546,7 +546,7 @@ inference_instance = None
 def signal_handler(signum, frame):
     """Handle Ctrl+C gracefully"""
     if inference_instance:
-        print("\n\n⚠️  Interrupt signal received, shutting down gracefully...")
+        print("\n\nInterrupt signal received, shutting down gracefully...")
         inference_instance.shutdown_requested = True
 
 
@@ -559,11 +559,11 @@ async def main():
         print("\nExamples:")
         print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth")
         print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth --no-kalman")
-        print("\n🔧 FINAL FIXES:")
-        print("  ✓ Live IMU wrist orientation (reads from BLE stream)")
-        print("  ✓ Proper Ctrl+C handling (always saves predictions_log.json)")
-        print("  ✓ Pinky finger curl direction")
-        print("  ✓ Performance optimization")
+        print("\nFINAL FIXES:")
+        print("  Live IMU wrist orientation (reads from BLE stream)")
+        print("  Proper Ctrl+C handling (always saves predictions_log.json)")
+        print("  Pinky finger curl direction")
+        print("  Performance optimization")
         sys.exit(1)
     
     model_path = sys.argv[1]
