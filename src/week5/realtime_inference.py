@@ -20,7 +20,8 @@ from bleak import BleakClient, BleakScanner
 
 # BLE Configuration
 SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
-CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+CHARACTERISTIC_UUID_TX = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # ESP32 -> PC (sensor data)
+CHARACTERISTIC_UUID_RX = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # PC -> ESP32 (haptic commands)
 DEVICE_NAME = "ESP32-BLE"
 
 # Unity UDP Configuration
@@ -218,6 +219,20 @@ class FlexToRotationInference:
         
         # CRITICAL FIX: Flag for graceful shutdown
         self.shutdown_requested = False
+
+        # Haptic feedback
+        self.ble_client = None
+        self.last_haptic_time = 0
+        self.haptic_debounce_ms = 500  # Match firmware debounce
+
+        # Object grab detection (from Unity)
+        self.object_grabbed = False
+        self.grab_frame_count = 0  # Alternative: trigger after N consecutive grab frames
+        self.grab_frame_threshold = 3  # Frames before haptic (300ms at ~10Hz)
+
+        # Joystick data
+        self._joystick_x = 0
+        self._joystick_y = 0
     
     def euler_to_quaternion(self, roll, pitch, yaw):
         """Convert Euler angles (degrees) to quaternion [x, y, z, w]"""
@@ -248,17 +263,22 @@ class FlexToRotationInference:
     
     def parse_ble_data(self, data_string):
         """Parse BLE data from ESP32
-        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz,ax,ay,az,gx,gy,gz
+        Format: SENSOR:flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz,ax,ay,az,gx,gy,gz,joyX,joyY,cPressed,zPressed,touch1-5
+        Returns: flex_angles, imu_quat
         """
         try:
+            # Remove "SENSOR:" prefix if present
+            if data_string.startswith("SENSOR:"):
+                data_string = data_string[7:]
+
             values = data_string.split(',')
-            if len(values) != 15:
+            if len(values) < 15:
                 return None, None
-            
+
             # Parse flex voltages
             for i in range(5):
                 self._flex_angles_buffer[i] = self.voltage_to_angle(float(values[i]))
-            
+
             # CRITICAL FIX: Extract LIVE IMU quaternion from BLE stream
             # Format from ESP32: qw, qx, qy, qz (indices 5, 6, 7, 8)
             imu_quat = [
@@ -267,9 +287,15 @@ class FlexToRotationInference:
                 float(values[8]),  # qz
                 float(values[5])   # qw
             ]
-            
+
+            # Parse joystick data (raw values 0-255)
+            # Indices: joyX=15, joyY=16
+            if len(values) >= 17:
+                self._joystick_x = int(values[15])
+                self._joystick_y = int(values[16])
+
             return self._flex_angles_buffer.copy(), imu_quat
-        
+
         except Exception as e:
             return None, None
     
@@ -342,6 +368,10 @@ class FlexToRotationInference:
         packet = {
             "timestamp": time.time(),
             "hand": "left",
+            "joystick": {
+                "x": self._joystick_x,  # Raw value 0-255
+                "y": self._joystick_y   # Raw value 0-255
+            },
             "wrist": {
                 "position": [0, 0, 0],
                 "rotation": wrist_quat  # LIVE IMU DATA
@@ -389,6 +419,59 @@ class FlexToRotationInference:
         except Exception as e:
             if self.frame_count % 100 == 0:
                 print(f"Error sending to Unity: {e}")
+
+    async def send_haptic_command(self, command="1"):
+        """Send haptic trigger command to ESP32 via RX characteristic"""
+        if not self.ble_client or not self.ble_client.is_connected:
+            return False
+
+        try:
+            await self.ble_client.write_gatt_char(CHARACTERISTIC_UUID_RX, command.encode('utf-8'))
+            return True
+        except Exception as e:
+            print(f"Error sending haptic command: {e}")
+            return False
+
+    async def receive_unity_signals(self):
+        """Listen for object grab signals from Unity VR
+        Creates a UDP socket to receive signals when user grabs objects in VR
+        Signal format: any message = object was grabbed
+        """
+        import socket
+
+        signal_port = 5556  # Separate port for Unity -> Python signals
+        signal_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        signal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        signal_socket.setblocking(False)
+
+        try:
+            signal_socket.bind(("127.0.0.1", signal_port))
+            print(f"✓ Listening for Unity signals on UDP port {signal_port}")
+        except Exception as e:
+            print(f"Warning: Could not bind signal listener: {e}")
+            signal_socket.close()
+            return
+
+        while not self.shutdown_requested:
+            try:
+                data, addr = signal_socket.recvfrom(1024)
+                message = data.decode('utf-8').strip()
+
+                # Any signal from Unity means object was grabbed
+                if message:
+                    self.object_grabbed = True
+                    print(f"Object grab signal received: {message}")
+
+            except BlockingIOError:
+                # No data available, this is expected
+                pass
+            except Exception as e:
+                if not self.shutdown_requested:
+                    print(f"Error receiving signal: {e}")
+
+            await asyncio.sleep(0.01)  # Small delay to prevent CPU spinning
+
+        signal_socket.close()
     
     def notification_handler(self, sender, data):
         """Handle BLE notifications"""
@@ -414,16 +497,55 @@ class FlexToRotationInference:
                 rotations[9]   # Pinky Y
             ]
             self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
-            
+
+            # Check if grab pose detected and send haptic feedback
+            current_time = time.time() * 1000  # Convert to milliseconds
+
+            # Track consecutive grab frames for alternative detection method
+            if self.current_pose == 'grab':
+                self.grab_frame_count += 1
+            else:
+                self.grab_frame_count = 0
+
+            # Haptic trigger logic:
+            # PRIMARY: trigger when grab pose + object_grabbed flag from Unity
+            # ALTERNATIVE: trigger after N consecutive grab frames (commented out)
+            haptic_should_trigger = False
+
+            if self.current_pose == 'grab' and (current_time - self.last_haptic_time) > self.haptic_debounce_ms:
+                # Primary: Wait for Unity to signal object was grabbed
+                if self.object_grabbed:
+                    haptic_should_trigger = True
+                    self.object_grabbed = False  # Reset flag after use
+                    trigger_source = "Unity signal"
+
+                # Alternative: Trigger after consecutive frames (uncomment to use)
+                # elif self.grab_frame_count >= self.grab_frame_threshold:
+                #     haptic_should_trigger = True
+                #     trigger_source = "Consecutive frames"
+
+            if haptic_should_trigger:
+                asyncio.create_task(self.send_haptic_command())
+                self.last_haptic_time = current_time
+                print(f"Haptic triggered ({trigger_source}) - Grab detected (confidence: {self.pose_confidence:.1%})")
+
             # Log prediction for evaluation
-            self.predictions_log.append({
+            log_entry = {
                 'timestamp': time.time(),
                 'frame': self.frame_count,
                 'pose': self.current_pose,
                 'confidence': float(self.pose_confidence),
                 'angles': [float(a) for a in proximal_angles],
                 'imu_quat': [float(q) for q in imu_quat]  # Also log IMU data
-            })
+            }
+
+            # Add haptic trigger info if one was just sent
+            if (self.current_pose == 'grab' and
+                (current_time - self.last_haptic_time) < 50):  # Recently triggered
+                log_entry['haptic_triggered'] = True
+                log_entry['object_grabbed'] = self.object_grabbed
+
+            self.predictions_log.append(log_entry)
         
         # Build and send packet
         packet = self.build_unity_packet(rotations, imu_quat)
@@ -499,23 +621,29 @@ class FlexToRotationInference:
         # CRITICAL FIX: Proper exception handling
         try:
             async with BleakClient(target_device.address) as client:
+                self.ble_client = client  # Store reference for haptic commands
                 print(f"Connected: {client.is_connected}")
-                
-                await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
+
+                await client.start_notify(CHARACTERISTIC_UUID_TX, self.notification_handler)
                 print("✓ Subscribed to notifications")
-                
+
                 print("\nSTREAMING TO UNITY")
                 print("Using LIVE IMU data for wrist orientation")
+                print("Joystick data included in hand position")
+                print("Listening for object grab signals from Unity...\n")
                 print("Press Ctrl+C to stop and save log\n")
-                
+
                 self.start_time = time.time()
-                
+
+                # Start signal listener in background
+                signal_task = asyncio.create_task(self.receive_unity_signals())
+
                 # Main loop
                 while not self.shutdown_requested:
                     await asyncio.sleep(0.02)
                 
                 # Clean shutdown
-                await client.stop_notify(CHARACTERISTIC_UUID)
+                await client.stop_notify(CHARACTERISTIC_UUID_TX)
                 
         except KeyboardInterrupt:
             print("\n\nKeyboard interrupt detected...")
