@@ -87,26 +87,28 @@ class DiagnosticTool:
         return float(angle)
     
     def parse_ble_data(self, data_string):
-        """Parse BLE data from ESP32"""
+        """Parse BLE data from ESP32
+        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz (9 values)
+        """
         try:
             values = [float(x) for x in data_string.split(',')]
-            if len(values) != 15:
+            if len(values) != 9:
                 return None, None
-            
-            # Flex angles
+
+            # Flex angles (indices 0-4)
             flex_angles = [
-                self.voltage_to_angle(values[0]),
-                self.voltage_to_angle(values[1]),
-                self.voltage_to_angle(values[2]),
-                self.voltage_to_angle(values[3]),
-                self.voltage_to_angle(values[4])
+                self.voltage_to_angle(values[4]),  # flex1 -> Thumb
+                self.voltage_to_angle(values[0]),  # flex2 -> Index
+                self.voltage_to_angle(values[3]),  # flex3 -> Middle
+                self.voltage_to_angle(values[2]),  # flex4 -> Ring
+                self.voltage_to_angle(values[1])   # flex5 -> Pinky
             ]
-            
-            # IMU quaternion [qx, qy, qz, qw]
+
+            # IMU quaternion [qx, qy, qz, qw] (indices 5-8: qw,qx,qy,qz)
             imu_quat = [values[6], values[7], values[8], values[5]]
-            
+
             return np.array(flex_angles), imu_quat
-        
+
         except Exception as e:
             return None, None
     

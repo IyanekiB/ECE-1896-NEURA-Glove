@@ -19,6 +19,8 @@ DEVICE_NAME = "ESP32-BLE"
 # Flex sensor calibration constants (voltage range from ESP32)
 FLEX_MIN_VOLTAGE = 0.55  # Fully bent (90 degrees)
 FLEX_MAX_VOLTAGE = 1.65  # Flat (0 degrees)
+INDEX_MIN_VOLTAGE = 0.10 # Fully bent (90 degrees)
+INDEX_MAX_VOLTAGE = 0.70 # Flat (0 degrees)
 
 class FlexDataCollector:
     def __init__(self, pose_name, session_id, output_dir="data/sensor_recordings"):
@@ -35,7 +37,7 @@ class FlexDataCollector:
         # Calibration values (per-sensor min/max for normalization)
         self.calibration = {
             'thumb': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
-            'index': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
+            'index': {'min': INDEX_MIN_VOLTAGE, 'max': INDEX_MAX_VOLTAGE},
             'middle': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
             'ring': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
             'pinky': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE}
@@ -56,7 +58,7 @@ class FlexDataCollector:
     
     def parse_sensor_data(self, data_string):
         """Parse BLE data string from ESP32
-        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz,ax,ay,az,gx,gy,gz
+        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz
         """
         try:
             values = [float(x) for x in data_string.split(',')]
@@ -65,11 +67,11 @@ class FlexDataCollector:
                 
             # Extract and convert flex sensors (voltages) to angles
             flex_voltages = {
-                'thumb': values[0],   # flex1 → Thumb
-                'index': values[1],   # flex2 → Index
-                'middle': values[2],  # flex3 → Middle
-                'ring': values[3],    # flex4 → Ring
-                'pinky': values[4]    # flex5 → Pinky
+                'thumb': values[4],   # flex1 → Thumb
+                'index': values[0],   # flex2 → Index
+                'middle': values[3],  # flex3 → Middle
+                'ring': values[2],    # flex4 → Ring
+                'pinky': values[1]    # flex5 → Pinky
             }
             
             flex_angles = {
@@ -79,18 +81,12 @@ class FlexDataCollector:
             
             # Extract IMU data
             quat = {'w': values[5], 'x': values[6], 'y': values[7], 'z': values[8]}
-            accel = {'x': values[9], 'y': values[10], 'z': values[11]}
-            gyro = {'x': values[12], 'y': values[13], 'z': values[14]}
             
             return {
                 'flex_voltages': flex_voltages,
                 'flex_angles': flex_angles,
-                'imu': {
-                    'quaternion': quat,
-                    'accelerometer': accel,
-                    'gyroscope': gyro
+                'imu': quat
                 }
-            }
         except Exception as e:
             print(f"Parse error: {e}")
             return None
