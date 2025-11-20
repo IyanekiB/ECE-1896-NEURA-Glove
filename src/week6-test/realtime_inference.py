@@ -65,6 +65,11 @@ FINGER_BEND_RATIOS = {
     }
 }
 
+# Fist confidence-based scaling for aggressive curl
+FIST_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger scaling
+FIST_RATIO_MULTIPLIER = 1.8     # 80% more aggressive curl (reaches 1.8x at 100% confidence)
+FIST_METACARPAL_BOOST = 2.0     # Extra multiplier for 4-finger metacarpals during fist
+
 # Pose templates
 POSE_TEMPLATES = {
     'flat_hand': [3.5, 7.5, 5.5, 6.0, 5.3],
@@ -298,16 +303,40 @@ class FlexToRotationInference:
         
         return rotations
     
-    def distribute_rotations(self, proximal_angle, ratios):
-        """Distribute proximal angle across finger joints"""
+    def distribute_rotations(self, proximal_angle, ratios, current_pose='unknown', confidence=0.0, finger_name='unknown'):
+        """Distribute proximal angle across finger joints
+
+        Args:
+            proximal_angle: Base angle from ML model
+            ratios: Bend ratios for the finger
+            current_pose: Current detected pose ('fist', 'flat_hand', 'grab', or 'unknown')
+            confidence: Confidence score of the detected pose (0.0 to 1.0)
+            finger_name: Name of the finger ('thumb', 'index', 'middle', 'ring', 'pinky')
+        """
         # Ensure angle is positive
         proximal_angle = max(0, proximal_angle)
-        
+
+        # Apply confidence-based scaling for fist pose
+        applied_ratios = ratios.copy()
+        if current_pose == 'fist' and confidence >= FIST_CONFIDENCE_THRESHOLD:
+            # Gradual scaling: at 0.8 confidence = 1.0x, at 1.0 confidence = 1.8x
+            scale_factor = 1.0 + (confidence - FIST_CONFIDENCE_THRESHOLD) * FIST_RATIO_MULTIPLIER
+            applied_ratios = {
+                key: ratio * scale_factor
+                for key, ratio in ratios.items()
+            }
+
+            # Extra boost for 4-finger metacarpals during fist (not thumb)
+            if finger_name in ['index', 'middle', 'ring', 'pinky']:
+                # Gradual scaling from 1.0x to 2.0x as confidence increases from 0 to 1.0
+                metacarpal_scale = 1.0 + confidence * (FIST_METACARPAL_BOOST - 1.0)
+                applied_ratios['metacarpal'] *= metacarpal_scale
+
         return {
-            'metacarpal': proximal_angle * ratios['metacarpal'],
-            'proximal': proximal_angle * ratios['proximal'],
-            'intermediate': proximal_angle * ratios['intermediate'],
-            'distal': proximal_angle * ratios['distal']
+            'metacarpal': proximal_angle * applied_ratios['metacarpal'],
+            'proximal': proximal_angle * applied_ratios['proximal'],
+            'intermediate': proximal_angle * applied_ratios['intermediate'],
+            'distal': proximal_angle * applied_ratios['distal']
         }
     
     def build_unity_packet(self, rotations, imu_quat):
@@ -322,12 +351,17 @@ class FlexToRotationInference:
         ring_y = rotations[7]
         pinky_y = rotations[9]
         
-        # Distribute rotations across joints
-        thumb_joints = self.distribute_rotations(thumb_y, FINGER_BEND_RATIOS['thumb'])
-        index_joints = self.distribute_rotations(index_y, FINGER_BEND_RATIOS['index'])
-        middle_joints = self.distribute_rotations(middle_y, FINGER_BEND_RATIOS['middle'])
-        ring_joints = self.distribute_rotations(ring_y, FINGER_BEND_RATIOS['ring'])
-        pinky_joints = self.distribute_rotations(pinky_y, FINGER_BEND_RATIOS['pinky'])
+        # Distribute rotations across joints with confidence-based scaling for fist
+        thumb_joints = self.distribute_rotations(thumb_y, FINGER_BEND_RATIOS['thumb'],
+                                                self.current_pose, self.pose_confidence, 'thumb')
+        index_joints = self.distribute_rotations(index_y, FINGER_BEND_RATIOS['index'],
+                                                self.current_pose, self.pose_confidence, 'index')
+        middle_joints = self.distribute_rotations(middle_y, FINGER_BEND_RATIOS['middle'],
+                                                 self.current_pose, self.pose_confidence, 'middle')
+        ring_joints = self.distribute_rotations(ring_y, FINGER_BEND_RATIOS['ring'],
+                                               self.current_pose, self.pose_confidence, 'ring')
+        pinky_joints = self.distribute_rotations(pinky_y, FINGER_BEND_RATIOS['pinky'],
+                                                self.current_pose, self.pose_confidence, 'pinky')
         
         # Convert to quaternions (X-axis rotation for finger curl)
         def angle_to_quat_x(angle):
