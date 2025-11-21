@@ -167,8 +167,8 @@ class PoseClassifier:
 class FlexToRotationInference:
     """Real-time inference - FINAL FIX"""
     
-    def __init__(self, model_path, enable_kalman=True, 
-                 process_variance=0.005, measurement_variance=0.08):
+    def __init__(self, model_path, enable_kalman=True,
+                 process_variance=0.005, measurement_variance=0.02):
         # Load model
         print(f"Loading model from: {model_path}")
         checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -231,8 +231,18 @@ class FlexToRotationInference:
         # Pose classifier
         self.pose_classifier = PoseClassifier()
         self.current_pose = 'unknown'
+        self.previous_pose = 'unknown'
         self.pose_confidence = 0.0
-        
+
+        # Pose blending for smooth transitions
+        self.pose_transition_frames = 0
+        self.pose_transition_duration = 3  # Blend over 5 frames (0.5s at 30fps)
+        self.previous_joints = {}  # Store previous frame's joint angles for blending
+
+        # Temporal smoothing of final joint angles
+        self.previous_final_joints = {}  # Store previous frame's smoothed angles
+        self.temporal_smoothing_alpha = 0.6  # EMA smoothing factor (0.3 = smooth)
+
         # Pre-allocate arrays
         self._flex_angles_buffer = np.zeros(5)
         
@@ -322,8 +332,8 @@ class FlexToRotationInference:
         
         return rotations
     
-    def distribute_rotations(self, proximal_angle, ratios, current_pose='unknown', confidence=0.0, finger_name='unknown'):
-        """Distribute proximal angle across finger joints
+    def distribute_rotations(self, proximal_angle, ratios, current_pose='unknown', confidence=0.0, finger_name='unknown', blend_factor=1.0, previous_joints=None):
+        """Distribute proximal angle across finger joints with optional pose blending
 
         Args:
             proximal_angle: Base angle from ML model
@@ -331,6 +341,8 @@ class FlexToRotationInference:
             current_pose: Current detected pose ('fist', 'flat_hand', 'grab', 'point', or 'unknown')
             confidence: Confidence score of the detected pose (0.0 to 1.0)
             finger_name: Name of the finger ('thumb', 'index', 'middle', 'ring', 'pinky')
+            blend_factor: 0.0 = old pose, 1.0 = new pose (for smooth transitions)
+            previous_joints: Previous frame's joint angles for blending
         """
         # Ensure angle is positive
         proximal_angle = max(0, proximal_angle)
@@ -394,16 +406,61 @@ class FlexToRotationInference:
                     for key, ratio in ratios.items()
                 }
 
-        return {
+        # Calculate current pose joint angles
+        current_joints = {
             'metacarpal': proximal_angle * applied_ratios['metacarpal'],
             'proximal': proximal_angle * applied_ratios['proximal'],
             'intermediate': proximal_angle * applied_ratios['intermediate'],
             'distal': proximal_angle * applied_ratios['distal']
         }
-    
+
+        # Blend with previous pose if in transition (blend_factor: 0.0=old, 1.0=new)
+        if blend_factor < 1.0 and previous_joints is not None:
+            blended = {}
+            for key in current_joints.keys():
+                prev_val = previous_joints.get(key, current_joints[key])
+                blended[key] = (1.0 - blend_factor) * prev_val + blend_factor * current_joints[key]
+            return blended
+
+        return current_joints
+
+    def _apply_temporal_smoothing(self, packet):
+        """Apply exponential moving average smoothing to final joint rotations
+
+        This smooths out any remaining jitter in the final output using EMA.
+        Modifies the packet in-place.
+        """
+        fingers = ['thumb', 'index', 'middle', 'ring', 'pinky']
+        joints = ['proximal', 'intermediate', 'distal']
+        thumb_joints = ['proximal', 'intermediate', 'distal']  # Skip metacarpal for thumb
+
+        for finger in fingers:
+            # Determine which joints to smooth
+            joints_to_smooth = thumb_joints if finger == 'thumb' else ['metacarpal'] + joints
+
+            for joint in joints_to_smooth:
+                if joint in packet[finger]:
+                    current_rot = packet[finger][joint]['rotation']
+
+                    # Get previous smoothed rotation if it exists
+                    key = f"{finger}_{joint}"
+                    if key in self.previous_final_joints:
+                        prev_rot = self.previous_final_joints[key]
+                        # Apply EMA: smoothed = (1-alpha)*prev + alpha*current
+                        smoothed_rot = [
+                            (1.0 - self.temporal_smoothing_alpha) * prev_rot[i] +
+                            self.temporal_smoothing_alpha * current_rot[i]
+                            for i in range(4)
+                        ]
+                        packet[finger][joint]['rotation'] = smoothed_rot
+                        self.previous_final_joints[key] = smoothed_rot
+                    else:
+                        # First frame, just store it
+                        self.previous_final_joints[key] = current_rot
+
     def build_unity_packet(self, rotations, imu_quat):
         """Build Unity UDP packet from rotations
-        
+
         CRITICAL: Uses LIVE IMU quaternion data for wrist orientation
         """
         # Extract proximal Y-axis rotations
@@ -412,18 +469,26 @@ class FlexToRotationInference:
         middle_y = rotations[5]
         ring_y = rotations[7]
         pinky_y = rotations[9]
-        
-        # Distribute rotations across joints with confidence-based scaling
+
+        # Calculate blend factor for smooth pose transitions
+        blend_factor = min(1.0, self.pose_transition_frames / max(1, self.pose_transition_duration))
+
+        # Distribute rotations across joints with pose blending
         thumb_joints = self.distribute_rotations(thumb_y, FINGER_BEND_RATIOS['thumb'],
-                                                self.current_pose, self.pose_confidence, 'thumb')
+                                                self.current_pose, self.pose_confidence, 'thumb',
+                                                blend_factor, self.previous_joints.get('thumb'))
         index_joints = self.distribute_rotations(index_y, FINGER_BEND_RATIOS['index'],
-                                                self.current_pose, self.pose_confidence, 'index')
+                                                self.current_pose, self.pose_confidence, 'index',
+                                                blend_factor, self.previous_joints.get('index'))
         middle_joints = self.distribute_rotations(middle_y, FINGER_BEND_RATIOS['middle'],
-                                                 self.current_pose, self.pose_confidence, 'middle')
+                                                 self.current_pose, self.pose_confidence, 'middle',
+                                                 blend_factor, self.previous_joints.get('middle'))
         ring_joints = self.distribute_rotations(ring_y, FINGER_BEND_RATIOS['ring'],
-                                               self.current_pose, self.pose_confidence, 'ring')
+                                               self.current_pose, self.pose_confidence, 'ring',
+                                               blend_factor, self.previous_joints.get('ring'))
         pinky_joints = self.distribute_rotations(pinky_y, FINGER_BEND_RATIOS['pinky'],
-                                                self.current_pose, self.pose_confidence, 'pinky')
+                                                self.current_pose, self.pose_confidence, 'pinky',
+                                                blend_factor, self.previous_joints.get('pinky'))
         
         # Convert to quaternions (X-axis rotation for finger curl)
         def angle_to_quat_x(angle):
@@ -476,7 +541,19 @@ class FlexToRotationInference:
                 "distal": {"position": [0, 0, 0], "rotation": angle_to_quat_x(pinky_joints['distal'])}
             }
         }
-        
+
+        # Apply temporal smoothing to joint angles using EMA
+        self._apply_temporal_smoothing(packet)
+
+        # Store current joints for next frame's blending
+        self.previous_joints = {
+            'thumb': thumb_joints,
+            'index': index_joints,
+            'middle': middle_joints,
+            'ring': ring_joints,
+            'pinky': pinky_joints
+        }
+
         return packet
     
     def send_to_unity(self, packet):
@@ -513,6 +590,13 @@ class FlexToRotationInference:
                 rotations[9]   # Pinky Y
             ]
             self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
+
+            # Handle pose transitions with blending
+            if self.current_pose != self.previous_pose:
+                self.pose_transition_frames = 0
+                self.previous_pose = self.current_pose
+            else:
+                self.pose_transition_frames += 1
 
             # Log prediction for evaluation
             self.predictions_log.append({
@@ -577,7 +661,7 @@ class FlexToRotationInference:
         print(f"  Point: Index straight (5%), others curl (1.5x)")
         print(f"  Flat Hand: All joints capped to 5° max")
         print(f"  Peace Sign: Index+Middle straight (10%), Thumb+Ring+Pinky curl (1.3x)")
-        print(f"  Smooth transitions via Kalman filtering on joint angles")
+        print(f"  Smooth transitions: Pose blending (15 frames) + EMA temporal smoothing (α=0.3)")
         print(f"\nFixes applied:")
         print(f"  Live IMU wrist orientation (not hardcoded)")
         print(f"  Proper Ctrl+C handling (saves log)")

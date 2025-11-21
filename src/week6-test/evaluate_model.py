@@ -382,7 +382,7 @@ def main():
     
     # Parse options
     ground_truth_file = None
-    output_dir = "evaluation_results"
+    output_dir = "results"
     
     if '--ground-truth' in sys.argv:
         idx = sys.argv.index('--ground-truth')
