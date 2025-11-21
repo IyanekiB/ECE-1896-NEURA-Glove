@@ -31,6 +31,28 @@ UNITY_PORT = 5555
 FLEX_MIN_VOLTAGE = 0.55
 FLEX_MAX_VOLTAGE = 1.65
 
+# Fist confidence-based scaling for aggressive curl
+FIST_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger scaling
+FIST_RATIO_MULTIPLIER = 1.8     # 80% more aggressive curl (reaches 1.8x at 100% confidence)
+FIST_METACARPAL_BOOST = 2.0     # Extra multiplier for 4-finger metacarpals during fist
+
+# Point pose scaling - index finger straight, others curl
+POINT_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger point pose scaling
+POINT_RATIO_MULTIPLIER = 1.5      # Moderate curl for non-index fingers (reaches 1.5x at 100% confidence)
+POINT_FINGER_STRAIGHTNESS = 0.05  # Keep index finger nearly straight (5% of normal angle)
+
+# Flat hand scaling - all fingers extend and smoothen out
+FLAT_HAND_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger flat hand scaling
+FLAT_HAND_MAX_ANGLE = 5.0              # Maximum angle for any joint at 100% confidence (very flat)
+
+# Peace sign scaling - index/middle straight, thumb/ring/pinky curl
+PEACE_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger peace scaling
+PEACE_RATIO_MULTIPLIER = 1.3      # Moderate curl for thumb/ring/pinky (reaches 1.3x at 100% confidence)
+PEACE_FINGER_STRAIGHTNESS = 0.1   # Keep index and middle relatively straight (10% of normal angle)
+
+# Pose transition smoothing - exponential smoothing for incredibly smooth transitions
+POSE_TRANSITION_ALPHA = 0.12       # Exponential smoothing factor for pose confidence (lower = smoother)
+
 # OPTIMIZED: More aggressive bend ratios for realistic fist
 FINGER_BEND_RATIOS = {
     'thumb': {
@@ -65,32 +87,13 @@ FINGER_BEND_RATIOS = {
     }
 }
 
-# Fist confidence-based scaling for aggressive curl
-FIST_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger scaling
-FIST_RATIO_MULTIPLIER = 1.8     # 80% more aggressive curl (reaches 1.8x at 100% confidence)
-FIST_METACARPAL_BOOST = 2.0     # Extra multiplier for 4-finger metacarpals during fist
-
-# Point pose scaling - index finger straight, others curl
-POINT_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger point pose scaling
-POINT_RATIO_MULTIPLIER = 1.5      # Moderate curl for non-index fingers (reaches 1.5x at 100% confidence)
-POINT_FINGER_STRAIGHTNESS = 0.05  # Keep index finger nearly straight (5% of normal angle)
-
-# Flat hand scaling - all fingers extend and smoothen out
-FLAT_HAND_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger flat hand scaling
-FLAT_HAND_MAX_ANGLE = 5.0              # Maximum angle for any joint at 100% confidence (very flat)
-
-# Peace sign scaling - index/middle straight, thumb/ring/pinky curl
-PEACE_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger peace scaling
-PEACE_RATIO_MULTIPLIER = 1.3      # Moderate curl for thumb/ring/pinky (reaches 1.3x at 100% confidence)
-PEACE_FINGER_STRAIGHTNESS = 0.1   # Keep index and middle relatively straight (10% of normal angle)
-
 # Pose templates
 POSE_TEMPLATES = {
-    'flat_hand': [18.0, 10.6, 19.9, 32.4, 27.6],
-    'fist': [15.5, 33.0, 31.8, 35.6, 31.6],
-    'grab': [15.7, 31.2, 34.6, 37.8, 33.5],
-    'peace_sign': [20.9, 6.4, 10.4, 36.8, 29.2],
-    'point': [24.5, 6.9, 34.1, 38.0, 33.7],
+    'flat_hand': [19.1, 12.4, 16.0, 34.7, 28.2],
+    'fist': [15.3, 33.2, 35.3, 41.1, 36.1],
+    'grab': [15.3, 26.2, 27.3, 37.6, 31.9],
+    'peace_sign': [23.1, 3.2, 3.6, 38.5, 30.3],
+    'point': [20.9, 13.4, 34.1, 38.9, 34.7],
 }
 
 
@@ -325,7 +328,7 @@ class FlexToRotationInference:
         Args:
             proximal_angle: Base angle from ML model
             ratios: Bend ratios for the finger
-            current_pose: Current detected pose ('fist', 'flat_hand', 'grab', 'point', 'peace_sign', or 'unknown')
+            current_pose: Current detected pose ('fist', 'flat_hand', 'grab', 'point', or 'unknown')
             confidence: Confidence score of the detected pose (0.0 to 1.0)
             finger_name: Name of the finger ('thumb', 'index', 'middle', 'ring', 'pinky')
         """
@@ -410,7 +413,7 @@ class FlexToRotationInference:
         ring_y = rotations[7]
         pinky_y = rotations[9]
         
-        # Distribute rotations across joints with confidence-based scaling for fist
+        # Distribute rotations across joints with confidence-based scaling
         thumb_joints = self.distribute_rotations(thumb_y, FINGER_BEND_RATIOS['thumb'],
                                                 self.current_pose, self.pose_confidence, 'thumb')
         index_joints = self.distribute_rotations(index_y, FINGER_BEND_RATIOS['index'],
@@ -510,7 +513,7 @@ class FlexToRotationInference:
                 rotations[9]   # Pinky Y
             ]
             self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
-            
+
             # Log prediction for evaluation
             self.predictions_log.append({
                 'timestamp': time.time(),
@@ -570,10 +573,11 @@ class FlexToRotationInference:
         print(f"Kalman filtering: {'ENABLED' if self.enable_kalman else 'DISABLED'}")
         print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
         print(f"\nPose-specific logic:")
-        print(f"  Fist: Aggressive curl with confidence-based scaling (1.8x)")
-        print(f"  Point: Index straight (5% angle), others curl (1.5x scaling)")
-        print(f"  Flat Hand: All joints capped to 5° max (very flat)")
-        print(f"  Peace Sign: Index+Middle straight (10% angle), Thumb+Ring+Pinky curl (1.3x)")
+        print(f"  Fist: Aggressive curl (1.8x scaling)")
+        print(f"  Point: Index straight (5%), others curl (1.5x)")
+        print(f"  Flat Hand: All joints capped to 5° max")
+        print(f"  Peace Sign: Index+Middle straight (10%), Thumb+Ring+Pinky curl (1.3x)")
+        print(f"  Smooth transitions via Kalman filtering on joint angles")
         print(f"\nFixes applied:")
         print(f"  Live IMU wrist orientation (not hardcoded)")
         print(f"  Proper Ctrl+C handling (saves log)")
