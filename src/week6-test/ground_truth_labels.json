@@ -1,0 +1,298 @@
+{
+  "metadata": {
+    "description": "Ground truth labels for pose predictions",
+    "instructions": "For each sample, set true_pose to one of: 'fist', 'flat_hand', 'grab', 'peace_sign', 'point'. Alignment is done by 'frame' when available."
+  },
+  "samples": [
+    {
+      "frame": 0,
+      "timestamp": 1763715507.0467522,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 10,
+      "timestamp": 1763715508.0272436,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 20,
+      "timestamp": 1763715509.051889,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 30,
+      "timestamp": 1763715510.036577,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 40,
+      "timestamp": 1763715511.057469,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 50,
+      "timestamp": 1763715512.0209026,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 60,
+      "timestamp": 1763715513.0372863,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 70,
+      "timestamp": 1763715514.0571086,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 80,
+      "timestamp": 1763715515.0778792,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 90,
+      "timestamp": 1763715516.0382318,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 100,
+      "timestamp": 1763715517.0579689,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 110,
+      "timestamp": 1763715518.0780804,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 120,
+      "timestamp": 1763715519.0370588,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 130,
+      "timestamp": 1763715520.0577004,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 140,
+      "timestamp": 1763715521.0776043,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 150,
+      "timestamp": 1763715522.0382097,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 160,
+      "timestamp": 1763715523.058054,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 170,
+      "timestamp": 1763715524.0784152,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 180,
+      "timestamp": 1763715525.0379574,
+      "true_pose": "grab"
+    },
+    {
+      "frame": 190,
+      "timestamp": 1763715526.0573564,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 200,
+      "timestamp": 1763715527.0783,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 210,
+      "timestamp": 1763715528.0385718,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 220,
+      "timestamp": 1763715529.0579274,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 230,
+      "timestamp": 1763715530.0816453,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 240,
+      "timestamp": 1763715531.0970483,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 250,
+      "timestamp": 1763715532.0588038,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 260,
+      "timestamp": 1763715533.0776536,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 270,
+      "timestamp": 1763715534.1205156,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 280,
+      "timestamp": 1763715535.05732,
+      "true_pose": "fist"
+    },
+    {
+      "frame": 290,
+      "timestamp": 1763715536.0789378,
+      "true_pose": "point"
+    },
+    {
+      "frame": 300,
+      "timestamp": 1763715537.0983543,
+      "true_pose": "point"
+    },
+    {
+      "frame": 310,
+      "timestamp": 1763715538.0594912,
+      "true_pose": "point"
+    },
+    {
+      "frame": 320,
+      "timestamp": 1763715539.0793834,
+      "true_pose": "point"
+    },
+    {
+      "frame": 330,
+      "timestamp": 1763715540.0989144,
+      "true_pose": "point"
+    },
+    {
+      "frame": 340,
+      "timestamp": 1763715541.0569575,
+      "true_pose": "point"
+    },
+    {
+      "frame": 350,
+      "timestamp": 1763715542.0775318,
+      "true_pose": "point"
+    },
+    {
+      "frame": 360,
+      "timestamp": 1763715543.097859,
+      "true_pose": "point"
+    },
+    {
+      "frame": 370,
+      "timestamp": 1763715544.0578957,
+      "true_pose": "point"
+    },
+    {
+      "frame": 380,
+      "timestamp": 1763715545.0782366,
+      "true_pose": "point"
+    },
+    {
+      "frame": 390,
+      "timestamp": 1763715546.0982306,
+      "true_pose": "point"
+    },
+    {
+      "frame": 400,
+      "timestamp": 1763715547.05803,
+      "true_pose": "point"
+    },
+    {
+      "frame": 410,
+      "timestamp": 1763715548.0781162,
+      "true_pose": "point"
+    },
+    {
+      "frame": 420,
+      "timestamp": 1763715549.0996373,
+      "true_pose": "point"
+    },
+    {
+      "frame": 430,
+      "timestamp": 1763715550.1176834,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 440,
+      "timestamp": 1763715551.079269,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 450,
+      "timestamp": 1763715552.09825,
+      "true_pose": "peace_sign"
+    },
+    {
+      "frame": 460,
+      "timestamp": 1763715553.1588116,
+      "true_pose": "peace_sign"
+    },
+    {
+      "frame": 470,
+      "timestamp": 1763715554.0787828,
+      "true_pose": "peace_sign"
+    },
+    {
+      "frame": 480,
+      "timestamp": 1763715555.0984795,
+      "true_pose": "peace_sign"
+    },
+    {
+      "frame": 490,
+      "timestamp": 1763715556.1185863,
+      "true_pose": "peace_sign"
+    },
+    {
+      "frame": 500,
+      "timestamp": 1763715557.078438,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 510,
+      "timestamp": 1763715558.098591,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 520,
+      "timestamp": 1763715559.1360967,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 530,
+      "timestamp": 1763715560.078261,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 540,
+      "timestamp": 1763715561.1003618,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 550,
+      "timestamp": 1763715562.118335,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 560,
+      "timestamp": 1763715563.079562,
+      "true_pose": "flat_hand"
+    },
+    {
+      "frame": 570,
+      "timestamp": 1763715564.0988986,
+      "true_pose": "flat_hand"
+    }
+  ]
+}

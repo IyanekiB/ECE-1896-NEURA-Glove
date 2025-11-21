@@ -1,0 +1,23 @@
+{
+  "session_id": "session_001",
+  "collection_time": "2025-11-05T23:58:06.105269",
+  "pose_duration": 15,
+  "total_poses": 3,
+  "results": [
+    {
+      "pose": "flat_hand",
+      "samples": 150,
+      "file": "data/sensor_recordings/session_001/flat_hand/sensor_data.json"
+    },
+    {
+      "pose": "fist",
+      "samples": 149,
+      "file": "data/sensor_recordings/session_001/fist/sensor_data.json"
+    },
+    {
+      "pose": "grab",
+      "samples": 149,
+      "file": "data/sensor_recordings/session_001/grab/sensor_data.json"
+    }
+  ]
+}
