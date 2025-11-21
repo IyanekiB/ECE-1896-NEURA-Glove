@@ -241,8 +241,8 @@ class ModelTrainer:
             }
         }, model_path)
         
-        print(f"\n✓ Model saved: {model_path}")
-        print(f"✓ Scalers saved in model checkpoint")
+        print(f"\nModel saved: {model_path}")
+        print(f"Scalers saved in model checkpoint")
 
 
 def main():
@@ -303,7 +303,7 @@ def main():
         scaler_path=output_dir / "scalers.pkl"
     )
     
-    print("\n✓ Training complete!")
+    print("\nTraining complete!")
 
 
 if __name__ == "__main__":

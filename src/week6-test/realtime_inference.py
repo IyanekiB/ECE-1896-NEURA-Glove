@@ -1,5 +1,5 @@
 """
-Real-Time Inference - FINAL FIX
+Real-Time Inference
 Critical Fixes:
 1. Proper Ctrl+C handling to save predictions_log.json
 2. Live IMU wrist orientation (not hardcoded)
@@ -205,7 +205,7 @@ class FlexToRotationInference:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
-        print("✓ Model loaded successfully")
+        print("Model loaded successfully")
         
         # Kalman filtering
         self.enable_kalman = enable_kalman
@@ -215,14 +215,14 @@ class FlexToRotationInference:
                 process_variance=process_variance,
                 measurement_variance=measurement_variance
             )
-            print(f"✓ Kalman filtering enabled (Q={process_variance}, R={measurement_variance})")
+            print(f"Kalman filtering enabled (Q={process_variance}, R={measurement_variance})")
         else:
-            print("⚠ Kalman filtering disabled")
+            print("Kalman filtering disabled")
         
         # UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.unity_address = (UNITY_IP, UNITY_PORT)
-        print(f"✓ UDP socket created for {UNITY_IP}:{UNITY_PORT}")
+        print(f"UDP socket created for {UNITY_IP}:{UNITY_PORT}")
         
         # Statistics
         self.frame_count = 0
@@ -498,7 +498,7 @@ class FlexToRotationInference:
         # Fixed thumb metacarpal
         thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
         
-        # CRITICAL FIX: Use LIVE IMU quaternion for wrist (not hardcoded!)
+        # CRITICAL FIX: Use LIVE IMU quaternion for wrist
         # The imu_quat comes directly from BLE stream each frame
         wrist_quat = imu_quat  # [qx, qy, qz, qw] format
         
@@ -645,7 +645,7 @@ class FlexToRotationInference:
             print(f"  Total predictions: {len(self.predictions_log)}")
             return True
         except Exception as e:
-            print(f"\n✗ Error saving predictions log: {e}")
+            print(f"\nError saving predictions log: {e}")
             return False
     
     async def run(self):
@@ -691,7 +691,7 @@ class FlexToRotationInference:
                 print(f"Connected: {client.is_connected}")
                 
                 await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
-                print("✓ Subscribed to notifications")
+                print("Subscribed to notifications")
                 
                 print("\nSTREAMING TO UNITY")
                 print("Using LIVE IMU data for wrist orientation")
@@ -710,7 +710,7 @@ class FlexToRotationInference:
             print("\n\nKeyboard interrupt detected...")
             self.shutdown_requested = True
         except Exception as e:
-            print(f"\n✗ Error during streaming: {e}")
+            print(f"\nError during streaming: {e}")
             self.shutdown_requested = True
         finally:
             # CRITICAL: Always save log, even on error
@@ -790,8 +790,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n✓ Graceful shutdown complete")
+        print("\nGraceful shutdown complete")
     except Exception as e:
-        print(f"\n✗ Fatal error: {e}")
+        print(f"\nFatal error: {e}")
         import traceback
         traceback.print_exc()

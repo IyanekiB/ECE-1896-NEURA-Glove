@@ -164,7 +164,7 @@ class FlexDataCollector:
                 print(f"  {i}...")
                 await asyncio.sleep(1)
             
-            print(f"\n🔴 COLLECTING - Hold the '{self.pose_name}' pose for {duration_seconds} seconds!")
+            print(f"\nCOLLECTING - Hold the '{self.pose_name}' pose for {duration_seconds} seconds!")
             self.is_collecting = True
             self.start_time = time.time()
             
@@ -202,7 +202,7 @@ class FlexDataCollector:
         with open(filename, 'w') as f:
             json.dump(output_data, f, indent=2)
         
-        print(f"\n✓ Saved: {filename}")
+        print(f"\nSaved: {filename}")
         print(f"  Total samples: {len(self.samples)}")
         print(f"  Duration: {self.samples[-1]['timestamp']:.2f}s")
         print(f"  Avg rate: {output_data['metadata']['sampling_rate_hz']:.1f} Hz")
@@ -239,9 +239,9 @@ async def main():
     
     if success:
         collector.save_data()
-        print("\n✓ Data collection complete!")
+        print("\nData collection complete!")
     else:
-        print("\n✗ Data collection failed!")
+        print("\nData collection failed!")
 
 
 if __name__ == "__main__":

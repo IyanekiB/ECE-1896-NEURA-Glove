@@ -36,11 +36,11 @@ class DataAligner:
         camera_file = self.camera_session_dir / pose_name / "camera_data.json"
         
         if not sensor_file.exists():
-            print(f"  ⚠️  Missing sensor data: {pose_name}")
+            print(f"  Missing sensor data: {pose_name}")
             return None, None
         
         if not camera_file.exists():
-            print(f"  ⚠️  Missing camera data: {pose_name}")
+            print(f"  Missing camera data: {pose_name}")
             return None, None
         
         with open(sensor_file) as f:

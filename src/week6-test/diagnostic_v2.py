@@ -1,5 +1,5 @@
 """
-Diagnostic Tool - FIXED VERSION
+Diagnostic Tool
 Use this to:
 1. See actual flex angles and ML predictions
 2. Calibrate pose templates (FIXED: now actually saves templates)
@@ -65,7 +65,7 @@ class DiagnosticTool:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
-        print("✓ Model loaded\n")
+        print("Model loaded\n")
         
         # Statistics
         self.frame_times = deque(maxlen=100)
@@ -174,21 +174,21 @@ class DiagnosticTool:
             print(f"FRAME {len(self.angle_history)} | FPS: {fps:.1f}")
             print(f"{'='*80}")
             
-            print("\n📊 FLEX SENSOR ANGLES (Input):")
+            print("\nFLEX SENSOR ANGLES (Input):")
             print(f"  Thumb:  {flex_angles[0]:6.1f}°")
             print(f"  Index:  {flex_angles[1]:6.1f}°")
             print(f"  Middle: {flex_angles[2]:6.1f}°")
             print(f"  Ring:   {flex_angles[3]:6.1f}°")
             print(f"  Pinky:  {flex_angles[4]:6.1f}°")
             
-            print("\n🤖 ML PREDICTED PROXIMAL ANGLES:")
+            print("\nML PREDICTED PROXIMAL ANGLES:")
             print(f"  Thumb:  {proximal_angles[0]:6.1f}°")
             print(f"  Index:  {proximal_angles[1]:6.1f}°")
             print(f"  Middle: {proximal_angles[2]:6.1f}°")
             print(f"  Ring:   {proximal_angles[3]:6.1f}°")
             print(f"  Pinky:  {proximal_angles[4]:6.1f}°")
             
-            print("\n🧭 IMU QUATERNION:")
+            print("\nIMU QUATERNION:")
             print(f"  [x={imu_quat[0]:7.4f}, y={imu_quat[1]:7.4f}, z={imu_quat[2]:7.4f}, w={imu_quat[3]:7.4f}]")
             
             # Convert to euler for readability
@@ -205,12 +205,12 @@ class DiagnosticTool:
                 print(f"  Min frame time: {np.min(self.frame_times)*1000:.1f}ms")
                 print(f"  Max frame time: {np.max(self.frame_times)*1000:.1f}ms")
             
-            print(f"\n💡 Commands: [f]lat_hand  [F]ist  [g]rab  [p]oint  [P]eace_sign  [s]ave_all  [q]uit")
+            print(f"\nCommands: [f]lat_hand  [F]ist  [g]rab  [p]oint  [P]eace_sign  [s]ave_all  [q]uit")
     
     def generate_template(self, pose_name):
         """FIXED: Generate pose template from recent samples"""
         if len(self.angle_history) < 30:
-            print(f"\n⚠ Not enough samples ({len(self.angle_history)}). Hold the pose longer.")
+            print(f"\nNot enough samples ({len(self.angle_history)}). Hold the pose longer.")
             return None
         
         # Use last 60 samples (last 6 seconds at 10Hz)
@@ -220,7 +220,7 @@ class DiagnosticTool:
         avg_angles = np.mean([s['proximal'] for s in recent_samples], axis=0)
         
         print(f"\n{'='*80}")
-        print(f"✓ TEMPLATE GENERATED: {pose_name}")
+        print(f"TEMPLATE GENERATED: {pose_name}")
         print(f"{'='*80}")
         print(f"'{pose_name}': [{avg_angles[0]:.1f}, {avg_angles[1]:.1f}, {avg_angles[2]:.1f}, {avg_angles[3]:.1f}, {avg_angles[4]:.1f}],")
         print(f"\nCopy this line into POSE_TEMPLATES in realtime_inference scripts")
@@ -237,7 +237,7 @@ class DiagnosticTool:
     def save_all_templates(self):
         """FIXED: Save all generated templates to file"""
         if not self.templates_generated:
-            print("\n⚠ No templates generated yet!")
+            print("\nNo templates generated yet!")
             return
         
         output = {
@@ -254,7 +254,7 @@ class DiagnosticTool:
                 json.dump(output, f, indent=2)
             
             print(f"\n{'='*80}")
-            print(f"✓ TEMPLATES SAVED: {filename}")
+            print(f"TEMPLATES SAVED: {filename}")
             print(f"{'='*80}")
             print(f"Total templates: {len(self.templates_generated)}")
             
@@ -267,11 +267,11 @@ class DiagnosticTool:
             print("}")
             
         except Exception as e:
-            print(f"\n✗ Error saving templates: {e}")
+            print(f"\nError saving templates: {e}")
     
     def input_thread(self):
         """FIXED: Thread for handling keyboard input"""
-        print("\n🎮 Input thread started. Type commands and press Enter:")
+        print("\nInput thread started. Type commands and press Enter:")
         
         while self.running:
             try:
@@ -310,7 +310,7 @@ class DiagnosticTool:
         print("  2. ML model predictions")
         print("  3. IMU quaternion values")
         print("  4. Performance metrics (FPS, frame times)")
-        print("\n✨ NEW: Template generation commands:")
+        print("\nNEW: Template generation commands:")
         print("  [f] = Generate template for 'flat_hand'")
         print("  [F] = Generate template for 'fist'")
         print("  [g] = Generate template for 'grab'")
@@ -346,19 +346,19 @@ class DiagnosticTool:
             input_thread = threading.Thread(target=self.input_thread, daemon=True)
             input_thread.start()
             
-            print("🚀 DIAGNOSTIC RUNNING - Make poses and type commands\n")
+            print("DIAGNOSTIC RUNNING - Make poses and type commands\n")
             
             try:
                 while self.running:
                     await asyncio.sleep(0.1)
                     
             except KeyboardInterrupt:
-                print("\n\n⏹️  Stopping...")
+                print("\n\nStopping...")
                 self.running = False
             
             await client.stop_notify(CHARACTERISTIC_UUID)
         
-        print("\n✓ Diagnostic ended")
+        print("\nDiagnostic ended")
         
         # Print summary
         if len(self.angle_history) > 0:
@@ -369,7 +369,7 @@ class DiagnosticTool:
             avg_all = np.mean(all_proximal, axis=0)
             std_all = np.std(all_proximal, axis=0)
             
-            print("\n📊 OVERALL STATISTICS:")
+            print("\nOVERALL STATISTICS:")
             print(f"  Thumb:  {avg_all[0]:6.1f}° ± {std_all[0]:5.1f}°")
             print(f"  Index:  {avg_all[1]:6.1f}° ± {std_all[1]:5.1f}°")
             print(f"  Middle: {avg_all[2]:6.1f}° ± {std_all[2]:5.1f}°")
@@ -378,7 +378,7 @@ class DiagnosticTool:
         
         # Auto-save templates if any were generated
         if self.templates_generated:
-            print("\n📝 Auto-saving templates...")
+            print("\nAuto-saving templates...")
             self.save_all_templates()
 
 

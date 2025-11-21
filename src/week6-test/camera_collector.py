@@ -127,7 +127,7 @@ class MediaPipeCollector:
             print(f"  {i}...")
             time.sleep(1)
         
-        print(f"\n🎥 RECORDING - Hold the '{self.pose_name}' pose for {duration_seconds} seconds!")
+        print(f"\nRECORDING - Hold the '{self.pose_name}' pose for {duration_seconds} seconds!")
         self.start_time = time.time()
         is_collecting = True
         
@@ -197,7 +197,7 @@ class MediaPipeCollector:
         cap.release()
         cv2.destroyAllWindows()
         
-        print(f"\n✓ Collection complete! Collected {len(self.samples)} samples")
+        print(f"\nCollection complete! Collected {len(self.samples)} samples")
         return True
     
     def save_data(self):
@@ -225,7 +225,7 @@ class MediaPipeCollector:
         with open(filename, 'w') as f:
             json.dump(output_data, f, indent=2)
         
-        print(f"\n✓ Saved: {filename}")
+        print(f"\nSaved: {filename}")
         print(f"  Total samples: {len(self.samples)}")
         print(f"  Duration: {self.samples[-1]['timestamp']:.2f}s")
         print(f"  Avg rate: {output_data['metadata']['sampling_rate_hz']:.1f} Hz")
@@ -243,7 +243,7 @@ if __name__ == "__main__":
         print("  python camera_collector_single.py session_001 fist 60")
         print("\nThis will collect 'fist' pose camera data for 60 seconds.")
         print("\nCommon pose names: flat_hand, fist, grab, pointing, peace_sign, ok_sign")
-        print("\n⚠️  IMPORTANT: Remove the glove before camera collection!")
+        print("\nIMPORTANT: Remove the glove before camera collection!")
         print("    (Camera needs clear view of hand)")
         sys.exit(1)
     
@@ -263,6 +263,6 @@ if __name__ == "__main__":
     
     if success:
         collector.save_data()
-        print("\n✓ Camera data collection complete!")
+        print("\nCamera data collection complete!")
     else:
-        print("\n✗ Camera data collection failed!")
+        print("\nCamera data collection failed!")

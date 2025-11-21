@@ -132,7 +132,7 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ Class distribution saved: {save_path}")
+            print(f"Class distribution saved: {save_path}")
         else:
             plt.show()
         
@@ -179,7 +179,7 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ Confidence distribution saved: {save_path}")
+            print(f"Confidence distribution saved: {save_path}")
         else:
             plt.show()
         
@@ -188,13 +188,13 @@ class ModelEvaluator:
     def plot_confusion_matrix(self, save_path=None):
         """Plot confusion matrix if ground truth available"""
         if not self.ground_truth:
-            print("⚠ Ground truth not provided, skipping confusion matrix")
+            print("Ground truth not provided, skipping confusion matrix")
             return
         
         y_true, y_pred = self.align_with_ground_truth()
         
         if not y_true:
-            print("⚠ No aligned predictions found")
+            print("No aligned predictions found")
             return
         
         # Get unique classes
@@ -220,7 +220,7 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ Confusion matrix saved: {save_path}")
+            print(f"Confusion matrix saved: {save_path}")
         else:
             plt.show()
         
@@ -267,7 +267,7 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ Confidence timeline saved: {save_path}")
+            print(f"Confidence timeline saved: {save_path}")
         else:
             plt.show()
         
@@ -355,7 +355,7 @@ def create_ground_truth_template():
     with open("ground_truth_template.json", 'w') as f:
         json.dump(template, f, indent=2)
     
-    print("✓ Ground truth template created: ground_truth_template.json")
+    print("Ground truth template created: ground_truth_template.json")
 
 
 def main():
