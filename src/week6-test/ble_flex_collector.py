@@ -19,8 +19,8 @@ DEVICE_NAME = "ESP32-BLE"
 # Flex sensor calibration constants (voltage range from ESP32)
 FLEX_MIN_VOLTAGE = 0.55  # Fully bent (90 degrees)
 FLEX_MAX_VOLTAGE = 1.65  # Flat (0 degrees)
-INDEX_MIN_VOLTAGE = 0.10 # Fully bent (90 degrees)
-INDEX_MAX_VOLTAGE = 0.70 # Flat (0 degrees)
+PINKY_MIN_VOLTAGE = 0.10 # Fully bent (90 degrees)
+PINKY_MAX_VOLTAGE = 0.70 # Flat (0 degrees)
 
 class FlexDataCollector:
     def __init__(self, pose_name, session_id, output_dir="data/sensor_recordings"):
@@ -37,10 +37,10 @@ class FlexDataCollector:
         # Calibration values (per-sensor min/max for normalization)
         self.calibration = {
             'thumb': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
-            'index': {'min': INDEX_MIN_VOLTAGE, 'max': INDEX_MAX_VOLTAGE},
+            'index': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
             'middle': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
             'ring': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE},
-            'pinky': {'min': FLEX_MIN_VOLTAGE, 'max': FLEX_MAX_VOLTAGE}
+            'pinky': {'min': PINKY_MIN_VOLTAGE, 'max': PINKY_MAX_VOLTAGE}
         }
         
         self.start_time = None
@@ -62,7 +62,8 @@ class FlexDataCollector:
         """
         try:
             values = [float(x) for x in data_string.split(',')]
-            if len(values) != 15:
+            if len(values) != 9:
+                print(f"[PARSE ERROR] Expected 9 values, got {len(values)}: {data_string[:50]}")
                 return None
                 
             # Extract and convert flex sensors (voltages) to angles
@@ -95,10 +96,15 @@ class FlexDataCollector:
         """Handle incoming BLE notifications"""
         if not self.is_collecting:
             return
-            
-        data_string = data.decode('utf-8')
+
+        try:
+            data_string = data.decode('utf-8')
+        except Exception as e:
+            print(f"[DECODE ERROR] Failed to decode BLE data: {e}")
+            return
+
         parsed = self.parse_sensor_data(data_string)
-        
+
         if parsed:
             sample = {
                 'tick_index': self.tick_index,
@@ -109,10 +115,14 @@ class FlexDataCollector:
             }
             self.samples.append(sample)
             self.tick_index += 1
-            
+
             # Print progress every 10 samples
             if self.tick_index % 10 == 0:
                 print(f"  Collected {self.tick_index} samples for {self.pose_name}...")
+        else:
+            # Log parse failures
+            if self.tick_index == 0:
+                print(f"[WARNING] First data packet failed to parse")
     
     async def connect_and_collect(self, duration_seconds):
         """Connect to ESP32 and collect data for specified duration"""

@@ -70,11 +70,27 @@ FIST_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger scaling
 FIST_RATIO_MULTIPLIER = 1.8     # 80% more aggressive curl (reaches 1.8x at 100% confidence)
 FIST_METACARPAL_BOOST = 2.0     # Extra multiplier for 4-finger metacarpals during fist
 
+# Point pose scaling - index finger straight, others curl
+POINT_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger point pose scaling
+POINT_RATIO_MULTIPLIER = 1.5      # Moderate curl for non-index fingers (reaches 1.5x at 100% confidence)
+POINT_FINGER_STRAIGHTNESS = 0.05  # Keep index finger nearly straight (5% of normal angle)
+
+# Flat hand scaling - all fingers extend and smoothen out
+FLAT_HAND_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger flat hand scaling
+FLAT_HAND_MAX_ANGLE = 5.0              # Maximum angle for any joint at 100% confidence (very flat)
+
+# Peace sign scaling - index/middle straight, thumb/ring/pinky curl
+PEACE_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence minimum to trigger peace scaling
+PEACE_RATIO_MULTIPLIER = 1.3      # Moderate curl for thumb/ring/pinky (reaches 1.3x at 100% confidence)
+PEACE_FINGER_STRAIGHTNESS = 0.1   # Keep index and middle relatively straight (10% of normal angle)
+
 # Pose templates
 POSE_TEMPLATES = {
-    'flat_hand': [3.5, 7.5, 5.5, 6.0, 5.3],
-    'fist': [48.9, 34.8, 32.5, 34.0, 30.2],
-    'grab': [34.4, 33.8, 37.5, 38.6, 29.7],
+    'flat_hand': [18.0, 10.6, 19.9, 32.4, 27.6],
+    'fist': [15.5, 33.0, 31.8, 35.6, 31.6],
+    'grab': [15.7, 31.2, 34.6, 37.8, 33.5],
+    'peace_sign': [20.9, 6.4, 10.4, 36.8, 29.2],
+    'point': [24.5, 6.9, 34.1, 38.0, 33.7],
 }
 
 
@@ -309,7 +325,7 @@ class FlexToRotationInference:
         Args:
             proximal_angle: Base angle from ML model
             ratios: Bend ratios for the finger
-            current_pose: Current detected pose ('fist', 'flat_hand', 'grab', or 'unknown')
+            current_pose: Current detected pose ('fist', 'flat_hand', 'grab', 'point', 'peace_sign', or 'unknown')
             confidence: Confidence score of the detected pose (0.0 to 1.0)
             finger_name: Name of the finger ('thumb', 'index', 'middle', 'ring', 'pinky')
         """
@@ -331,6 +347,49 @@ class FlexToRotationInference:
                 # Gradual scaling from 1.0x to 2.0x as confidence increases from 0 to 1.0
                 metacarpal_scale = 1.0 + confidence * (FIST_METACARPAL_BOOST - 1.0)
                 applied_ratios['metacarpal'] *= metacarpal_scale
+
+        # Apply point pose logic - index finger straight, others curl
+        elif current_pose == 'point' and confidence >= POINT_CONFIDENCE_THRESHOLD:
+            if finger_name == 'index':
+                # Keep index finger nearly straight (minimal bend)
+                proximal_angle *= POINT_FINGER_STRAIGHTNESS
+            else:
+                # Other fingers curl with confidence-based scaling
+                # Gradual scaling: at 0.8 confidence = 1.0x, at 1.0 confidence = 1.5x
+                scale_factor = 1.0 + (confidence - POINT_CONFIDENCE_THRESHOLD) * POINT_RATIO_MULTIPLIER
+                applied_ratios = {
+                    key: ratio * scale_factor
+                    for key, ratio in ratios.items()
+                }
+
+        # Apply flat hand logic - all fingers smoothen out and extend
+        elif current_pose == 'flat_hand' and confidence >= FLAT_HAND_CONFIDENCE_THRESHOLD:
+            # Cap all joint angles to a maximum to keep hand very flat
+            # Gradual cap from full angle to FLAT_HAND_MAX_ANGLE as confidence increases
+            max_angle = proximal_angle + (FLAT_HAND_MAX_ANGLE - proximal_angle) * (1.0 - (confidence - FLAT_HAND_CONFIDENCE_THRESHOLD) / (1.0 - FLAT_HAND_CONFIDENCE_THRESHOLD))
+            max_angle = min(max_angle, FLAT_HAND_MAX_ANGLE)
+
+            # Return heavily reduced angles
+            return {
+                'metacarpal': min(proximal_angle * applied_ratios['metacarpal'], max_angle),
+                'proximal': min(proximal_angle * applied_ratios['proximal'], max_angle),
+                'intermediate': min(proximal_angle * applied_ratios['intermediate'], max_angle),
+                'distal': min(proximal_angle * applied_ratios['distal'], max_angle)
+            }
+
+        # Apply peace sign logic - index/middle straight, thumb/ring/pinky curl
+        elif current_pose == 'peace_sign' and confidence >= PEACE_CONFIDENCE_THRESHOLD:
+            if finger_name in ['index', 'middle']:
+                # Keep index and middle relatively straight
+                proximal_angle *= PEACE_FINGER_STRAIGHTNESS
+            elif finger_name in ['thumb', 'ring', 'pinky']:
+                # Thumb, ring, pinky curl with confidence-based scaling
+                # Gradual scaling: at 0.8 confidence = 1.0x, at 1.0 confidence = 1.3x
+                scale_factor = 1.0 + (confidence - PEACE_CONFIDENCE_THRESHOLD) * PEACE_RATIO_MULTIPLIER
+                applied_ratios = {
+                    key: ratio * scale_factor
+                    for key, ratio in ratios.items()
+                }
 
         return {
             'metacarpal': proximal_angle * applied_ratios['metacarpal'],
@@ -510,6 +569,11 @@ class FlexToRotationInference:
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
         print(f"Kalman filtering: {'ENABLED' if self.enable_kalman else 'DISABLED'}")
         print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
+        print(f"\nPose-specific logic:")
+        print(f"  Fist: Aggressive curl with confidence-based scaling (1.8x)")
+        print(f"  Point: Index straight (5% angle), others curl (1.5x scaling)")
+        print(f"  Flat Hand: All joints capped to 5° max (very flat)")
+        print(f"  Peace Sign: Index+Middle straight (10% angle), Thumb+Ring+Pinky curl (1.3x)")
         print(f"\nFixes applied:")
         print(f"  Live IMU wrist orientation (not hardcoded)")
         print(f"  Proper Ctrl+C handling (saves log)")

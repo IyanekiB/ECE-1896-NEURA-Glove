@@ -205,7 +205,7 @@ class DiagnosticTool:
                 print(f"  Min frame time: {np.min(self.frame_times)*1000:.1f}ms")
                 print(f"  Max frame time: {np.max(self.frame_times)*1000:.1f}ms")
             
-            print(f"\n💡 Commands: [f]lat_hand  [F]ist  [g]rab  [p]eace  [o]k_sign  [s]ave_all  [q]uit")
+            print(f"\n💡 Commands: [f]lat_hand  [F]ist  [g]rab  [p]oint  [P]eace_sign  [s]ave_all  [q]uit")
     
     def generate_template(self, pose_name):
         """FIXED: Generate pose template from recent samples"""
@@ -283,15 +283,17 @@ class DiagnosticTool:
                     self.generate_template('fist')
                 elif command == 'g':
                     self.generate_template('grab')
+                elif command == 'p':
+                    self.generate_template('point')
                 elif command == 's':
                     self.save_all_templates()
                 elif command == 'q':
-                    print("\n⏹️  Quit requested...")
+                    print("\nQuit requested...")
                     self.running = False
                     break
                 else:
-                    print(f"\n❓ Unknown command: {command}")
-                    print("Commands: [f]lat_hand  [F]ist  [g]rab  [p]eace  [o]k_sign  [s]ave_all  [q]uit")
+                    print(f"\nUnknown command: {command}")
+                    print("Commands: [f]lat_hand  [F]ist  [g]rab  [p]oint  [P]eace_sign  [s]ave_all  [q]uit")
                     
             except EOFError:
                 break
@@ -312,6 +314,8 @@ class DiagnosticTool:
         print("  [f] = Generate template for 'flat_hand'")
         print("  [F] = Generate template for 'fist'")
         print("  [g] = Generate template for 'grab'")
+        print("  [p] = Generate template for 'point'")
+        print("  [P] = Generate template for 'peace_sign'")
         print("  [s] = Save all templates to file")
         print("  [q] = Quit")
         print("\nHold a pose for 6+ seconds, then type the command and press Enter")
