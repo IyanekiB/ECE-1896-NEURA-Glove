@@ -500,7 +500,7 @@ class FlexToRotationInference:
         
         # CRITICAL FIX: Use LIVE IMU quaternion for wrist
         # The imu_quat comes directly from BLE stream each frame
-        wrist_quat = imu_quat  # [qx, qy, qz, qw] format
+        wrist_quat =  [imu_quat[0], imu_quat[1], imu_quat[2], -imu_quat[3]]  # Negate qy  # [qx, qy, qz, qw] format
         
         # Build packet
         packet = {
