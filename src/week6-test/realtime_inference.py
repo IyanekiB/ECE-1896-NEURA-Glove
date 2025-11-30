@@ -16,16 +16,23 @@ import time
 import signal
 import sys
 from bleak import BleakClient, BleakScanner
+import threading
 
 
 # BLE Configuration
 SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+CHARACTERISTIC_UUID_RX = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # For writing to ESP32
+
 DEVICE_NAME = "ESP32-BLE"
 
 # Unity UDP Configuration
 UNITY_IP = "127.0.0.1"
 UNITY_PORT = 5555
+
+# UDP Server Configuration (for receiving commands FROM external sources)
+UDP_LISTEN_IP = "127.0.0.1"
+UDP_LISTEN_PORT = 5556
 
 # Flex sensor calibration
 FLEX_MIN_VOLTAGE = 0.55
@@ -53,37 +60,43 @@ PEACE_FINGER_STRAIGHTNESS = 0.1   # Keep index and middle relatively straight (1
 # Pose transition smoothing - exponential smoothing for incredibly smooth transitions
 POSE_TRANSITION_ALPHA = 0.12       # Exponential smoothing factor for pose confidence (lower = smoother)
 
-# OPTIMIZED: More aggressive bend ratios for realistic fist
+# Kalman filter parameters
+TEMPORAL_SMOOTHING_ALPHA = 1 # .6, .9, 1
+PROCESS_VARIANCE = 0.05 # .005, .02, .05
+MEASUREMENT_VARIANCE = 0.005 # .02, .01, .005
+
+# RMSE FIX: Reduced bend ratios to match MediaPipe ground truth
+# Previous values caused 18-62° RMSE on intermediate joints
 FINGER_BEND_RATIOS = {
     'thumb': {
-        'metacarpal': 0.4,   # Increased from 0.3
-        'proximal': 1.2,     # Increased from 1.0
-        'intermediate': 1.5, # Increased from 1.2
-        'distal': 0.8        # Increased from 0.6
+        'metacarpal': 0.4,   # Was 0.3
+        'proximal': 1.0,     # Was 0.8
+        'intermediate': 1.2, # 0.9
+        'distal': 0.65        # Was 0.5
     },
     'index': {
-        'metacarpal': 0.7,   # Increased from 0.5
-        'proximal': 1.3,     # Increased from 1.0
-        'intermediate': 2.2, # Increased from 1.8
-        'distal': 1.2        # Increased from 0.9
+        'metacarpal': 0.7,   # Was 0.4
+        'proximal': 1.0,     # Was 1.3
+        'intermediate': 1.4, # Was 1.0 
+        'distal': 0.8        # Was 1.2
     },
     'middle': {
-        'metacarpal': 0.7,   # Increased from 0.5
-        'proximal': 1.3,     # Increased from 1.0
-        'intermediate': 2.2, # Increased from 1.8
-        'distal': 1.2        # Increased from 0.9
+        'metacarpal': 0.7,   # Was 0.4
+        'proximal': 1.0,     # Was 1.0
+        'intermediate': 1.5, # Was 1.0 
+        'distal': 0.65        # Was 0.8
     },
     'ring': {
-        'metacarpal': 0.7,   # Increased from 0.5
-        'proximal': 1.3,     # Increased from 1.0
-        'intermediate': 1.8, # Increased from 1.5
-        'distal': 1.0        # Increased from 0.7
+        'metacarpal': 0.7,   # Was 0.4
+        'proximal': 1.0,     # Was 1.0
+        'intermediate': 1.5, # Was 0.9
+        'distal': 0.65        # Was 0.7
     },
     'pinky': {
-        'metacarpal': 0.7,   # Increased from 0.5
-        'proximal': 1.3,     # Increased from 1.0
-        'intermediate': 1.8, # Increased from 1.5
-        'distal': 1.0        # Increased from 0.7
+        'metacarpal': 0.7,   # Was 0.4
+        'proximal': 0.9,     # Was 1.0
+        'intermediate': 1.5, # Was 0.9
+        'distal': 0.65        # Was 0.7
     }
 }
 
@@ -168,7 +181,7 @@ class FlexToRotationInference:
     """Real-time inference - FINAL FIX"""
     
     def __init__(self, model_path, enable_kalman=True,
-                 process_variance=0.005, measurement_variance=0.02):
+                 process_variance=PROCESS_VARIANCE, measurement_variance=MEASUREMENT_VARIANCE):
         # Load model
         print(f"Loading model from: {model_path}")
         checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -241,7 +254,7 @@ class FlexToRotationInference:
 
         # Temporal smoothing of final joint angles
         self.previous_final_joints = {}  # Store previous frame's smoothed angles
-        self.temporal_smoothing_alpha = 0.6  # EMA smoothing factor (0.3 = smooth)
+        self.temporal_smoothing_alpha = TEMPORAL_SMOOTHING_ALPHA  # EMA smoothing factor (0.3 = smooth)
 
         # Pre-allocate arrays
         self._flex_angles_buffer = np.zeros(5)
@@ -252,6 +265,20 @@ class FlexToRotationInference:
         
         # CRITICAL FIX: Flag for graceful shutdown
         self.shutdown_requested = False
+        
+        # UDP listener for receiving notifications
+        self.listener_sock = None
+        self.listener_thread = None
+        self.listening = False
+        self.notifications = []
+        self.log_notifications = True
+        
+        # Setup UDP listener
+        self._setup_listener()
+        
+        # BLE client reference for sending data to ESP32
+        self.ble_client = None
+        self.ble_loop = None
     
     def euler_to_quaternion(self, roll, pitch, yaw):
         """Convert Euler angles (degrees) to quaternion [x, y, z, w]"""
@@ -298,10 +325,11 @@ class FlexToRotationInference:
 
             # Extract LIVE IMU quaternion from BLE stream
             # Format from ESP32 (indices 5-8): qw,qx,qy,qz
+            # Negate qx to fix inverted up/down direction
             imu_quat = [
-                float(values[6]),  # qx
-                float(values[7]),  # qy
-                float(values[8]),  # qz
+                -1 * float(values[6]),  # qx (negated to fix up/down inversion)
+                -1 * float(values[8]),  # qy (negated to fix up/down inversion)
+                -1 * float(values[7]),  # qz
                 float(values[5])   # qw
             ]
 
@@ -495,17 +523,19 @@ class FlexToRotationInference:
             theta = np.radians(max(0, angle))
             return [np.sin(theta/2), 0, 0, np.cos(theta/2)]
         
-        # Fixed thumb metacarpal
-        thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
+        # Fixed thumb metacarpal (mirrored for right hand)
+        thumb_metacarpal_rot = self.euler_to_quaternion(-15, -43.526, 69.284)
         
         # CRITICAL FIX: Use LIVE IMU quaternion for wrist
         # The imu_quat comes directly from BLE stream each frame
-        wrist_quat =  [imu_quat[0], imu_quat[1], imu_quat[2], -imu_quat[3]]  # Negate qy  # [qx, qy, qz, qw] format
+        wrist_quat = imu_quat  # [qx, qy, qz, qw] format
         
         # Build packet
         packet = {
             "timestamp": time.time(),
-            "hand": "left",
+            "hand": "right",
+            "isGrabbing": self.current_pose == 'grab' or self.current_pose == 'fist',
+            "isPointing": self.current_pose == 'point',
             "wrist": {
                 "position": [0, 0, 0],
                 "rotation": wrist_quat  # LIVE IMU DATA
@@ -570,15 +600,21 @@ class FlexToRotationInference:
         """Handle BLE notifications"""
         if self.shutdown_requested:
             return
-        
+
+        # LATENCY TRACKING: t0 - sensor data received from BLE
+        t0_sensor_read = time.time()
+
         data_string = data.decode('utf-8')
-        
+
         flex_angles, imu_quat = self.parse_ble_data(data_string)
         if flex_angles is None:
             return
-        
+
         # Predict rotations (with Kalman filtering if enabled)
         rotations = self.predict_rotations(flex_angles)
+
+        # LATENCY TRACKING: t1 - inference complete
+        t1_inference_complete = time.time()
         
         # Classify pose (every 10 frames to reduce CPU load)
         if self.frame_count % 10 == 0:
@@ -610,6 +646,17 @@ class FlexToRotationInference:
         
         # Build and send packet
         packet = self.build_unity_packet(rotations, imu_quat)
+
+        # LATENCY TRACKING: t2 - before UDP send
+        t2_udp_send = time.time()
+
+        # Add latency timestamps to packet
+        packet['latency_timestamps'] = {
+            'sensor_read': t0_sensor_read,
+            'inference_complete': t1_inference_complete,
+            'udp_send': t2_udp_send
+        }
+
         self.send_to_unity(packet)
         
         # Print status every 30 frames
@@ -690,22 +737,33 @@ class FlexToRotationInference:
             async with BleakClient(target_device.address) as client:
                 print(f"Connected: {client.is_connected}")
                 
+                # Store BLE client and event loop for UDP->BLE forwarding
+                self.ble_client = client
+                self.ble_loop = asyncio.get_event_loop()
+                
                 await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
                 print("Subscribed to notifications")
                 
                 print("\nSTREAMING TO UNITY")
                 print("Using LIVE IMU data for wrist orientation")
                 print("Press Ctrl+C to stop and save log\n")
-                
+
+                self._start_listener()
                 self.start_time = time.time()
                 
                 # Main loop
-                while not self.shutdown_requested:
-                    await asyncio.sleep(0.02)
-                
-                # Clean shutdown
-                await client.stop_notify(CHARACTERISTIC_UUID)
-                
+                try:
+                    while not self.shutdown_requested:
+                        await asyncio.sleep(0.02)
+                finally:
+                    await client.stop_notify(CHARACTERISTIC_UUID)
+
+                    self._stop_listener()
+                    
+                    # Clear BLE client reference
+                    self.ble_client = None
+                    self.ble_loop = None
+                    
         except KeyboardInterrupt:
             print("\n\nKeyboard interrupt detected...")
             self.shutdown_requested = True
@@ -727,6 +785,88 @@ class FlexToRotationInference:
             # Save predictions log
             print("\nSaving predictions log...")
             self.save_predictions_log()
+
+    async def _send_to_ble(self, message):
+        """Send message to ESP32 via BLE RX characteristic"""
+        if self.ble_client and self.ble_client.is_connected:
+            try:
+                # Encode message and send to RX characteristic
+                await self.ble_client.write_gatt_char(
+                    CHARACTERISTIC_UUID_RX,
+                    message.encode('utf-8')
+                )
+            except Exception as e:
+                raise Exception(f"BLE write failed: {e}")
+    
+    def _setup_listener(self):
+        """Setup UDP listener for incoming notifications"""
+        try:
+            self.listener_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.listener_sock.settimeout(0.1)  # Non-blocking with timeout
+            self.listener_sock.bind((UDP_LISTEN_IP, UDP_LISTEN_PORT))
+            print(f"✓ UDP listener created on {UDP_LISTEN_IP}:{UDP_LISTEN_PORT}")
+        except Exception as e:
+            print(f"⚠ Warning: Could not create UDP listener: {e}")
+            self.listener_sock = None
+            self.log_notifications = False
+    
+    def _listen_for_notifications(self):
+        """Background thread to listen for UDP notifications and forward to BLE"""
+        print("🎧 Notification listener started")
+        
+        while self.listening and self.listener_sock:
+            try:
+                data, addr = self.listener_sock.recvfrom(4096)
+                message = data.decode('utf-8')
+                
+                notification = {
+                    'timestamp': time.time(),
+                    'from': f"{addr[0]}:{addr[1]}",
+                    'message': message
+                }
+                
+                self.notifications.append(notification)
+                print(f"📨 Received notification: {message} from {addr}")
+                
+                # Forward to BLE device if connected
+                if self.ble_client and self.ble_client.is_connected and self.ble_loop:
+                    try:
+                        # Schedule BLE write in the async event loop
+                        future = asyncio.run_coroutine_threadsafe(
+                            self._send_to_ble("1"),
+                            self.ble_loop
+                        )
+                        # Wait for completion with timeout
+                        future.result(timeout=1.0)
+                        print(f"📤 Forwarded to BLE: {message}")
+                    except Exception as ble_error:
+                        print(f"⚠ Error forwarding to BLE: {ble_error}")
+                
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if self.listening:
+                    print(f"⚠ Error receiving notification: {e}")
+        
+        print("🎧 Notification listener stopped")
+    
+    def _start_listener(self):
+        """Start the notification listener thread"""
+        if not self.log_notifications or not self.listener_sock:
+            return
+        
+        self.listening = True
+        self.listener_thread = threading.Thread(target=self._listen_for_notifications, daemon=True)
+        self.listener_thread.start()
+    
+    def _stop_listener(self):
+        """Stop the notification listener thread"""
+        if not self.listener_thread:
+            return
+        
+        self.listening = False
+        if self.listener_thread.is_alive():
+            self.listener_thread.join(timeout=1.0)
 
 
 # CRITICAL FIX: Global reference for signal handler

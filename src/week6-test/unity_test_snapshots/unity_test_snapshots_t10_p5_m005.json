@@ -1,0 +1,230 @@
+{
+    "metadata": {
+        "total_snapshots": 5,
+        "timestamp": "2025-11-28 20:24:49",
+        "unity_version": "6000.2.6f1",
+        "platform": "WindowsEditor"
+    },
+    "snapshots": [
+        {
+            "snapshot_id": 0,
+            "timestamp": 50.85943603515625,
+            "frame": 2549,
+            "pose": "unknown",
+            "confidence": 0.0,
+            "joint_angles": {
+                "thumb": {
+                    "metacarpal": 32.049678802490237,
+                    "proximal": 5.000001430511475,
+                    "intermediate": 5.000001430511475,
+                    "distal": 0.0,
+                    "tip": 1.987846699118444e-16
+                },
+                "index": {
+                    "metacarpal": 0.4498937726020813,
+                    "proximal": 5.000001907348633,
+                    "intermediate": 5.000001430511475,
+                    "distal": 5.000001430511475,
+                    "tip": 0.0
+                },
+                "middle": {
+                    "metacarpal": 0.4498937726020813,
+                    "proximal": 5.000001430511475,
+                    "intermediate": 5.000001430511475,
+                    "distal": 5.000001430511475,
+                    "tip": 3.1805547185895105e-15
+                },
+                "ring": {
+                    "metacarpal": 0.4498937726020813,
+                    "proximal": 5.000001907348633,
+                    "intermediate": 5.000001430511475,
+                    "distal": 5.000001430511475,
+                    "tip": 3.1805547185895105e-15
+                },
+                "pinky": {
+                    "metacarpal": 5.083207607269287,
+                    "proximal": 5.000001907348633,
+                    "intermediate": 5.000001430511475,
+                    "distal": 5.000001430511475,
+                    "tip": -3.1805547185895105e-15
+                }
+            }
+        },
+        {
+            "snapshot_id": 1,
+            "timestamp": 57.322940826416019,
+            "frame": 2841,
+            "pose": "unknown",
+            "confidence": 0.0,
+            "joint_angles": {
+                "thumb": {
+                    "metacarpal": 32.049678802490237,
+                    "proximal": 24.353487014770509,
+                    "intermediate": 30.422683715820314,
+                    "distal": 0.0,
+                    "tip": 1.987846699118444e-16
+                },
+                "index": {
+                    "metacarpal": 5.3720831871032719,
+                    "proximal": 62.09917068481445,
+                    "intermediate": 57.893768310546878,
+                    "distal": 82.07975006103516,
+                    "tip": 0.0
+                },
+                "middle": {
+                    "metacarpal": 5.71560525894165,
+                    "proximal": 66.08369445800781,
+                    "intermediate": 61.608150482177737,
+                    "distal": 75.79399108886719,
+                    "tip": 3.1805547185895105e-15
+                },
+                "ring": {
+                    "metacarpal": 6.571543216705322,
+                    "proximal": 76.00985717773438,
+                    "intermediate": 70.86128997802735,
+                    "distal": 81.91442108154297,
+                    "tip": 3.1805547185895105e-15
+                },
+                "pinky": {
+                    "metacarpal": 10.3900146484375,
+                    "proximal": 66.8106689453125,
+                    "intermediate": 62.28580856323242,
+                    "distal": 86.21208953857422,
+                    "tip": -3.1805547185895105e-15
+                }
+            }
+        },
+        {
+            "snapshot_id": 2,
+            "timestamp": 67.3899154663086,
+            "frame": 3299,
+            "pose": "unknown",
+            "confidence": 0.0,
+            "joint_angles": {
+                "thumb": {
+                    "metacarpal": 32.049678802490237,
+                    "proximal": 18.798860549926759,
+                    "intermediate": 23.49857521057129,
+                    "distal": 0.0,
+                    "tip": 1.987846699118444e-16
+                },
+                "index": {
+                    "metacarpal": 1.5539789199829102,
+                    "proximal": 17.31437110900879,
+                    "intermediate": 32.154937744140628,
+                    "distal": 54.41604995727539,
+                    "tip": 0.0
+                },
+                "middle": {
+                    "metacarpal": 1.710589051246643,
+                    "proximal": 19.076997756958009,
+                    "intermediate": 35.428375244140628,
+                    "distal": 59.9556999206543,
+                    "tip": 3.1805547185895105e-15
+                },
+                "ring": {
+                    "metacarpal": 2.39385724067688,
+                    "proximal": 26.75459098815918,
+                    "intermediate": 49.68659973144531,
+                    "distal": 68.79682922363281,
+                    "tip": 3.1805547185895105e-15
+                },
+                "pinky": {
+                    "metacarpal": 6.648368835449219,
+                    "proximal": 22.739683151245118,
+                    "intermediate": 42.23041915893555,
+                    "distal": 58.47288131713867,
+                    "tip": -3.1805547185895105e-15
+                }
+            }
+        },
+        {
+            "snapshot_id": 3,
+            "timestamp": 75.23213195800781,
+            "frame": 3697,
+            "pose": "unknown",
+            "confidence": 0.0,
+            "joint_angles": {
+                "thumb": {
+                    "metacarpal": 32.049678802490237,
+                    "proximal": 33.643714904785159,
+                    "intermediate": 42.05464553833008,
+                    "distal": 0.0,
+                    "tip": 1.987846699118444e-16
+                },
+                "index": {
+                    "metacarpal": 0.018454385921359063,
+                    "proximal": 0.20215687155723573,
+                    "intermediate": 0.37543419003486636,
+                    "distal": 0.6353501081466675,
+                    "tip": 0.0
+                },
+                "middle": {
+                    "metacarpal": 0.02354520373046398,
+                    "proximal": 0.25814932584762576,
+                    "intermediate": 0.4794202148914337,
+                    "distal": 0.811326265335083,
+                    "tip": 3.1805547185895105e-15
+                },
+                "ring": {
+                    "metacarpal": 2.9571621417999269,
+                    "proximal": 33.20326614379883,
+                    "intermediate": 61.66318130493164,
+                    "distal": 85.3798828125,
+                    "tip": 3.1805547185895105e-15
+                },
+                "pinky": {
+                    "metacarpal": 6.949051380157471,
+                    "proximal": 25.938091278076173,
+                    "intermediate": 48.17073440551758,
+                    "distal": 66.69795989990235,
+                    "tip": -3.1805547185895105e-15
+                }
+            }
+        },
+        {
+            "snapshot_id": 4,
+            "timestamp": 82.07625579833985,
+            "frame": 4017,
+            "pose": "unknown",
+            "confidence": 0.0,
+            "joint_angles": {
+                "thumb": {
+                    "metacarpal": 32.049678802490237,
+                    "proximal": 30.281726837158204,
+                    "intermediate": 37.85206604003906,
+                    "distal": 0.0,
+                    "tip": 1.987846699118444e-16
+                },
+                "index": {
+                    "metacarpal": 0.028135888278484346,
+                    "proximal": 0.29861676692962649,
+                    "intermediate": 0.5542322993278503,
+                    "distal": 0.9376556277275086,
+                    "tip": 0.0
+                },
+                "middle": {
+                    "metacarpal": 2.538259744644165,
+                    "proximal": 28.487791061401368,
+                    "intermediate": 52.90555953979492,
+                    "distal": 89.53227996826172,
+                    "tip": 3.1805547185895105e-15
+                },
+                "ring": {
+                    "metacarpal": 2.7969257831573488,
+                    "proximal": 31.442598342895509,
+                    "intermediate": 58.393062591552737,
+                    "distal": 80.851806640625,
+                    "tip": 3.1805547185895105e-15
+                },
+                "pinky": {
+                    "metacarpal": 7.096744537353516,
+                    "proximal": 27.660995483398439,
+                    "intermediate": 51.370079040527347,
+                    "distal": 71.12765502929688,
+                    "tip": -3.1805547185895105e-15
+                }
+            }
+        }
+    ]
+}

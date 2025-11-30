@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "total_notifications": 2,
+    "log_file": "src/week5/predictions_log.json",
+    "playback_speed": 2.0,
+    "listen_port": 5556
+  },
+  "notifications": [
+    {
+      "timestamp": 1763420197.4421003,
+      "from": "127.0.0.1:5555",
+      "message": "1"
+    },
+    {
+      "timestamp": 1763420203.5803392,
+      "from": "127.0.0.1:5555",
+      "message": "1"
+    }
+  ]
+}

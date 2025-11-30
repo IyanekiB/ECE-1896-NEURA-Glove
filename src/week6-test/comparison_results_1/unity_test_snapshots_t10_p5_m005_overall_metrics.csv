@@ -1,0 +1,10 @@
+Metric,Value
+Average_RMSE_deg,27.50
+Max_RMSE_deg,86.38
+Min_RMSE_deg,0.33
+Std_RMSE_deg,30.15
+Number_of_Snapshots,5
+Overall_Evaluation,Poor
+Excellent_Threshold_deg,8.0
+Good_Threshold_deg,10.0
+Acceptable_Threshold_deg,15.0

@@ -15,18 +15,23 @@ import socket
 import time
 import signal
 import sys
+import threading
 from bleak import BleakClient, BleakScanner
 
 
 # BLE Configuration
 SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
-CHARACTERISTIC_UUID_TX = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # ESP32 -> PC (sensor data)
-CHARACTERISTIC_UUID_RX = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # PC -> ESP32 (haptic commands)
+CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+CHARACTERISTIC_UUID_RX = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # For writing to ESP32
 DEVICE_NAME = "ESP32-BLE"
 
-# Unity UDP Configuration
+# Unity UDP Configuration (for sending data TO Unity)
 UNITY_IP = "127.0.0.1"
 UNITY_PORT = 5555
+
+# UDP Server Configuration (for receiving commands FROM external sources)
+UDP_LISTEN_IP = "127.0.0.1"
+UDP_LISTEN_PORT = 5556
 
 # Flex sensor calibration
 FLEX_MIN_VOLTAGE = 0.55
@@ -219,20 +224,20 @@ class FlexToRotationInference:
         
         # CRITICAL FIX: Flag for graceful shutdown
         self.shutdown_requested = False
-
-        # Haptic feedback
+        
+        # UDP listener for receiving notifications
+        self.listener_sock = None
+        self.listener_thread = None
+        self.listening = False
+        self.notifications = []
+        self.log_notifications = True
+        
+        # Setup UDP listener
+        self._setup_listener()
+        
+        # BLE client reference for sending data to ESP32
         self.ble_client = None
-        self.last_haptic_time = 0
-        self.haptic_debounce_ms = 500  # Match firmware debounce
-
-        # Object grab detection (from Unity)
-        self.object_grabbed = False
-        self.grab_frame_count = 0  # Alternative: trigger after N consecutive grab frames
-        self.grab_frame_threshold = 3  # Frames before haptic (300ms at ~10Hz)
-
-        # Joystick data
-        self._joystick_x = 0
-        self._joystick_y = 0
+        self.ble_loop = None
     
     def euler_to_quaternion(self, roll, pitch, yaw):
         """Convert Euler angles (degrees) to quaternion [x, y, z, w]"""
@@ -263,39 +268,29 @@ class FlexToRotationInference:
     
     def parse_ble_data(self, data_string):
         """Parse BLE data from ESP32
-        Format: SENSOR:flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz,ax,ay,az,gx,gy,gz,joyX,joyY,cPressed,zPressed,touch1-5
-        Returns: flex_angles, imu_quat
+        Format: flex1,flex2,flex3,flex4,flex5,qw,qx,qy,qz
         """
         try:
-            # Remove "SENSOR:" prefix if present
-            if data_string.startswith("SENSOR:"):
-                data_string = data_string[7:]
-
             values = data_string.split(',')
-            if len(values) < 15:
+            if len(values) != 9:
+                print(f"Error parsing BLE data: values length is not 9")
                 return None, None
-
+            
             # Parse flex voltages
             for i in range(5):
                 self._flex_angles_buffer[i] = self.voltage_to_angle(float(values[i]))
-
+            
             # CRITICAL FIX: Extract LIVE IMU quaternion from BLE stream
             # Format from ESP32: qw, qx, qy, qz (indices 5, 6, 7, 8)
             imu_quat = [
                 float(values[6]),  # qx
-                float(values[7]),  # qy
-                float(values[8]),  # qz
+                float(values[8]),  # qy
+                float(values[7]),  # qz
                 float(values[5])   # qw
             ]
-
-            # Parse joystick data (raw values 0-255)
-            # Indices: joyX=15, joyY=16
-            if len(values) >= 17:
-                self._joystick_x = int(values[15])
-                self._joystick_y = int(values[16])
-
+            
             return self._flex_angles_buffer.copy(), imu_quat
-
+        
         except Exception as e:
             return None, None
     
@@ -333,6 +328,13 @@ class FlexToRotationInference:
             'distal': proximal_angle * ratios['distal']
         }
     
+    def pose_detect(self):
+        """Detect pose based on finger angles"""
+        if self.current_pose == 'fist' or self.current_pose == 'grab':
+            return True
+        else:
+            return False
+
     def build_unity_packet(self, rotations, imu_quat):
         """Build Unity UDP packet from rotations
         
@@ -353,12 +355,13 @@ class FlexToRotationInference:
         pinky_joints = self.distribute_rotations(pinky_y, FINGER_BEND_RATIOS['pinky'])
         
         # Convert to quaternions (X-axis rotation for finger curl)
+        # For RIGHT hand: negate X-axis rotation to curl fingers toward palm
         def angle_to_quat_x(angle):
             theta = np.radians(max(0, angle))
             return [np.sin(theta/2), 0, 0, np.cos(theta/2)]
         
-        # Fixed thumb metacarpal
-        thumb_metacarpal_rot = self.euler_to_quaternion(21.194, 43.526, -69.284)
+        # Fixed thumb metacarpal (mirrored for right hand)
+        thumb_metacarpal_rot = self.euler_to_quaternion(-15, -43.526, 69.284)
         
         # CRITICAL FIX: Use LIVE IMU quaternion for wrist (not hardcoded!)
         # The imu_quat comes directly from BLE stream each frame
@@ -367,11 +370,8 @@ class FlexToRotationInference:
         # Build packet
         packet = {
             "timestamp": time.time(),
-            "hand": "left",
-            "joystick": {
-                "x": self._joystick_x,  # Raw value 0-255
-                "y": self._joystick_y   # Raw value 0-255
-            },
+            "hand": "right",
+            "isGrabbing": self.current_pose == 'grab' or self.current_pose == 'fist',
             "wrist": {
                 "position": [0, 0, 0],
                 "rotation": wrist_quat  # LIVE IMU DATA
@@ -419,59 +419,6 @@ class FlexToRotationInference:
         except Exception as e:
             if self.frame_count % 100 == 0:
                 print(f"Error sending to Unity: {e}")
-
-    async def send_haptic_command(self, command="1"):
-        """Send haptic trigger command to ESP32 via RX characteristic"""
-        if not self.ble_client or not self.ble_client.is_connected:
-            return False
-
-        try:
-            await self.ble_client.write_gatt_char(CHARACTERISTIC_UUID_RX, command.encode('utf-8'))
-            return True
-        except Exception as e:
-            print(f"Error sending haptic command: {e}")
-            return False
-
-    async def receive_unity_signals(self):
-        """Listen for object grab signals from Unity VR
-        Creates a UDP socket to receive signals when user grabs objects in VR
-        Signal format: any message = object was grabbed
-        """
-        import socket
-
-        signal_port = 5556  # Separate port for Unity -> Python signals
-        signal_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        signal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        signal_socket.setblocking(False)
-
-        try:
-            signal_socket.bind(("127.0.0.1", signal_port))
-            print(f"✓ Listening for Unity signals on UDP port {signal_port}")
-        except Exception as e:
-            print(f"Warning: Could not bind signal listener: {e}")
-            signal_socket.close()
-            return
-
-        while not self.shutdown_requested:
-            try:
-                data, addr = signal_socket.recvfrom(1024)
-                message = data.decode('utf-8').strip()
-
-                # Any signal from Unity means object was grabbed
-                if message:
-                    self.object_grabbed = True
-                    print(f"Object grab signal received: {message}")
-
-            except BlockingIOError:
-                # No data available, this is expected
-                pass
-            except Exception as e:
-                if not self.shutdown_requested:
-                    print(f"Error receiving signal: {e}")
-
-            await asyncio.sleep(0.01)  # Small delay to prevent CPU spinning
-
-        signal_socket.close()
     
     def notification_handler(self, sender, data):
         """Handle BLE notifications"""
@@ -479,9 +426,11 @@ class FlexToRotationInference:
             return
         
         data_string = data.decode('utf-8')
+
         
         flex_angles, imu_quat = self.parse_ble_data(data_string)
         if flex_angles is None:
+            print(f"Error parsing BLE data: flex_angles is None")
             return
         
         # Predict rotations (with Kalman filtering if enabled)
@@ -497,55 +446,16 @@ class FlexToRotationInference:
                 rotations[9]   # Pinky Y
             ]
             self.current_pose, self.pose_confidence = self.pose_classifier.classify(proximal_angles)
-
-            # Check if grab pose detected and send haptic feedback
-            current_time = time.time() * 1000  # Convert to milliseconds
-
-            # Track consecutive grab frames for alternative detection method
-            if self.current_pose == 'grab':
-                self.grab_frame_count += 1
-            else:
-                self.grab_frame_count = 0
-
-            # Haptic trigger logic:
-            # PRIMARY: trigger when grab pose + object_grabbed flag from Unity
-            # ALTERNATIVE: trigger after N consecutive grab frames (commented out)
-            haptic_should_trigger = False
-
-            if self.current_pose == 'grab' and (current_time - self.last_haptic_time) > self.haptic_debounce_ms:
-                # Primary: Wait for Unity to signal object was grabbed
-                if self.object_grabbed:
-                    haptic_should_trigger = True
-                    self.object_grabbed = False  # Reset flag after use
-                    trigger_source = "Unity signal"
-
-                # Alternative: Trigger after consecutive frames (uncomment to use)
-                # elif self.grab_frame_count >= self.grab_frame_threshold:
-                #     haptic_should_trigger = True
-                #     trigger_source = "Consecutive frames"
-
-            if haptic_should_trigger:
-                asyncio.create_task(self.send_haptic_command())
-                self.last_haptic_time = current_time
-                print(f"Haptic triggered ({trigger_source}) - Grab detected (confidence: {self.pose_confidence:.1%})")
-
+            
             # Log prediction for evaluation
-            log_entry = {
+            self.predictions_log.append({
                 'timestamp': time.time(),
                 'frame': self.frame_count,
                 'pose': self.current_pose,
                 'confidence': float(self.pose_confidence),
                 'angles': [float(a) for a in proximal_angles],
                 'imu_quat': [float(q) for q in imu_quat]  # Also log IMU data
-            }
-
-            # Add haptic trigger info if one was just sent
-            if (self.current_pose == 'grab' and
-                (current_time - self.last_haptic_time) < 50):  # Recently triggered
-                log_entry['haptic_triggered'] = True
-                log_entry['object_grabbed'] = self.object_grabbed
-
-            self.predictions_log.append(log_entry)
+            })
         
         # Build and send packet
         packet = self.build_unity_packet(rotations, imu_quat)
@@ -562,7 +472,7 @@ class FlexToRotationInference:
     def save_predictions_log(self):
         """CRITICAL FIX: Save predictions log for evaluation"""
         if not self.predictions_log:
-            print("No predictions to save (ran too short?)")
+            print("⚠ No predictions to save (ran too short?)")
             return False
         
         output = {
@@ -580,11 +490,11 @@ class FlexToRotationInference:
             with open(self.log_file, 'w') as f:
                 json.dump(output, f, indent=2)
             
-            print(f"\nPredictions log saved: {self.log_file}")
+            print(f"\n✓ Predictions log saved: {self.log_file}")
             print(f"  Total predictions: {len(self.predictions_log)}")
             return True
         except Exception as e:
-            print(f"\n✗ Error saving predictions log: {e}")
+            print(f"\n Error saving predictions log: {e}")
             return False
     
     async def run(self):
@@ -595,11 +505,11 @@ class FlexToRotationInference:
         print(f"Streaming to Unity at {UNITY_IP}:{UNITY_PORT}")
         print(f"Kalman filtering: {'ENABLED' if self.enable_kalman else 'DISABLED'}")
         print(f"Pose templates: {list(POSE_TEMPLATES.keys())}")
-        print(f"\nFixes applied:")
-        print(f"  Live IMU wrist orientation (not hardcoded)")
-        print(f"  Proper Ctrl+C handling (saves log)")
-        print(f"  Pinky curl direction")
-        print(f"  Performance optimization")
+        print(f"\n🔧 Fixes applied:")
+        print(f"  ✓ Live IMU wrist orientation (not hardcoded)")
+        print(f"  ✓ Proper Ctrl+C handling (saves log)")
+        print(f"  ✓ Pinky curl direction")
+        print(f"  ✓ Performance optimization")
         
         print("\nScanning for ESP32...")
         devices = await BleakScanner.discover(timeout=5.0)
@@ -621,32 +531,38 @@ class FlexToRotationInference:
         # CRITICAL FIX: Proper exception handling
         try:
             async with BleakClient(target_device.address) as client:
-                self.ble_client = client  # Store reference for haptic commands
                 print(f"Connected: {client.is_connected}")
-
-                await client.start_notify(CHARACTERISTIC_UUID_TX, self.notification_handler)
+                
+                # Store BLE client and event loop for UDP->BLE forwarding
+                self.ble_client = client
+                self.ble_loop = asyncio.get_event_loop()
+                
+                await client.start_notify(CHARACTERISTIC_UUID, self.notification_handler)
                 print("✓ Subscribed to notifications")
-
-                print("\nSTREAMING TO UNITY")
-                print("Using LIVE IMU data for wrist orientation")
-                print("Joystick data included in hand position")
-                print("Listening for object grab signals from Unity...\n")
+                
+                print("\n🚀 STREAMING TO UNITY")
+                print("💡 Using LIVE IMU data for wrist orientation")
+                print("💡 UDP notifications will be forwarded to ESP32")
                 print("Press Ctrl+C to stop and save log\n")
 
+                self._start_listener()
                 self.start_time = time.time()
-
-                # Start signal listener in background
-                signal_task = asyncio.create_task(self.receive_unity_signals())
-
+                
                 # Main loop
-                while not self.shutdown_requested:
-                    await asyncio.sleep(0.02)
-                
-                # Clean shutdown
-                await client.stop_notify(CHARACTERISTIC_UUID_TX)
-                
+                try:
+                    while not self.shutdown_requested:
+                        await asyncio.sleep(0.02)
+                finally:
+                    await client.stop_notify(CHARACTERISTIC_UUID)
+
+                    self._stop_listener()
+                    
+                    # Clear BLE client reference
+                    self.ble_client = None
+                    self.ble_loop = None
+                    
         except KeyboardInterrupt:
-            print("\n\nKeyboard interrupt detected...")
+            print("\n\n⏹️  Keyboard interrupt detected...")
             self.shutdown_requested = True
         except Exception as e:
             print(f"\n✗ Error during streaming: {e}")
@@ -664,8 +580,90 @@ class FlexToRotationInference:
                 print(f"Average FPS: {self.frame_count / elapsed:.1f}")
             
             # Save predictions log
-            print("\nSaving predictions log...")
+            print("\n💾 Saving predictions log...")
             self.save_predictions_log()
+
+    async def _send_to_ble(self, message):
+        """Send message to ESP32 via BLE RX characteristic"""
+        if self.ble_client and self.ble_client.is_connected:
+            try:
+                # Encode message and send to RX characteristic
+                await self.ble_client.write_gatt_char(
+                    CHARACTERISTIC_UUID_RX,
+                    message.encode('utf-8')
+                )
+            except Exception as e:
+                raise Exception(f"BLE write failed: {e}")
+    
+    def _setup_listener(self):
+        """Setup UDP listener for incoming notifications"""
+        try:
+            self.listener_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.listener_sock.settimeout(0.1)  # Non-blocking with timeout
+            self.listener_sock.bind((UDP_LISTEN_IP, UDP_LISTEN_PORT))
+            print(f"✓ UDP listener created on {UDP_LISTEN_IP}:{UDP_LISTEN_PORT}")
+        except Exception as e:
+            print(f"⚠ Warning: Could not create UDP listener: {e}")
+            self.listener_sock = None
+            self.log_notifications = False
+    
+    def _listen_for_notifications(self):
+        """Background thread to listen for UDP notifications and forward to BLE"""
+        print("🎧 Notification listener started")
+        
+        while self.listening and self.listener_sock:
+            try:
+                data, addr = self.listener_sock.recvfrom(4096)
+                message = data.decode('utf-8')
+                
+                notification = {
+                    'timestamp': time.time(),
+                    'from': f"{addr[0]}:{addr[1]}",
+                    'message': message
+                }
+                
+                self.notifications.append(notification)
+                print(f"📨 Received notification: {message} from {addr}")
+                
+                # Forward to BLE device if connected
+                if self.ble_client and self.ble_client.is_connected and self.ble_loop:
+                    try:
+                        # Schedule BLE write in the async event loop
+                        future = asyncio.run_coroutine_threadsafe(
+                            self._send_to_ble("1"),
+                            self.ble_loop
+                        )
+                        # Wait for completion with timeout
+                        future.result(timeout=1.0)
+                        print(f"📤 Forwarded to BLE: {message}")
+                    except Exception as ble_error:
+                        print(f"⚠ Error forwarding to BLE: {ble_error}")
+                
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if self.listening:
+                    print(f"⚠ Error receiving notification: {e}")
+        
+        print("🎧 Notification listener stopped")
+    
+    def _start_listener(self):
+        """Start the notification listener thread"""
+        if not self.log_notifications or not self.listener_sock:
+            return
+        
+        self.listening = True
+        self.listener_thread = threading.Thread(target=self._listen_for_notifications, daemon=True)
+        self.listener_thread.start()
+    
+    def _stop_listener(self):
+        """Stop the notification listener thread"""
+        if not self.listener_thread:
+            return
+        
+        self.listening = False
+        if self.listener_thread.is_alive():
+            self.listener_thread.join(timeout=1.0)
 
 
 # CRITICAL FIX: Global reference for signal handler
@@ -674,8 +672,10 @@ inference_instance = None
 def signal_handler(signum, frame):
     """Handle Ctrl+C gracefully"""
     if inference_instance:
-        print("\n\nInterrupt signal received, shutting down gracefully...")
+        print("\n\n⚠️  Interrupt signal received, shutting down gracefully...")
         inference_instance.shutdown_requested = True
+
+
 
 
 async def main():
@@ -687,11 +687,11 @@ async def main():
         print("\nExamples:")
         print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth")
         print("  python realtime_inference_final_fix.py models/flex_to_rotation_model.pth --no-kalman")
-        print("\nFINAL FIXES:")
-        print("  Live IMU wrist orientation (reads from BLE stream)")
-        print("  Proper Ctrl+C handling (always saves predictions_log.json)")
-        print("  Pinky finger curl direction")
-        print("  Performance optimization")
+        print("\n🔧 FINAL FIXES:")
+        print("  ✓ Live IMU wrist orientation (reads from BLE stream)")
+        print("  ✓ Proper Ctrl+C handling (always saves predictions_log.json)")
+        print("  ✓ Pinky finger curl direction")
+        print("  ✓ Performance optimization")
         sys.exit(1)
     
     model_path = sys.argv[1]

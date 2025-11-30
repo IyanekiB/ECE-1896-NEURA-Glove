@@ -1,0 +1,13 @@
+Finger,Joint,Avg_RMSE_deg,Min_RMSE_deg,Max_RMSE_deg,Std_RMSE_deg,Status
+index,proximal,17.04,2.07,41.60,13.37,Poor
+index,intermediate,9.80,0.16,22.71,8.64,Good
+index,distal,10.39,0.73,30.97,11.69,Acceptable
+middle,proximal,17.38,0.97,39.06,12.56,Poor
+middle,intermediate,20.81,0.50,53.49,19.44,Poor
+middle,distal,18.66,3.45,38.24,14.70,Poor
+ring,proximal,10.30,0.76,24.63,8.77,Acceptable
+ring,intermediate,28.60,1.89,56.78,19.77,Poor
+ring,distal,32.26,2.17,46.33,16.17,Poor
+pinky,proximal,8.12,1.17,25.26,8.70,Good
+pinky,intermediate,35.83,1.10,69.94,27.70,Poor
+pinky,distal,22.61,0.27,31.60,11.95,Poor
